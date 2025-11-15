@@ -1,0 +1,127 @@
+import { GoogleGenAI } from "@google/genai";
+import { chunkArray } from "../../helpers/chunkArray.js";
+
+const genAI = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
+
+// Configuration
+const MAX_FILES_PER_BATCH = 5; // how many files we group in one AI call
+const MAX_CODE_PREVIEW_CHARS = 2000; // prevent sending huge files
+
+const STRUCTURED_PROMPT = `
+You are an expert code reviewer.
+For each code chunk below, provide a short structured JSON analysis describing what it does or what changed.
+
+Return ONLY a valid JSON array with no markdown formatting, no backticks, and no explanatory text.
+
+The JSON must match this schema exactly:
+[
+  {
+    "file": "string",
+    "chunkName": "string",
+    "chunkType": "string",
+    "steps": ["string"]
+  }
+]
+
+Your entire response must be valid JSON that can be parsed directly.Here are the code chunks:
+`;
+
+const AI_RESPONSE_SCHEMA = {
+  type: "array",
+  items: {
+    type: "object",
+    properties: {
+      file: {
+        type: "string",
+        description: "The name of the file.", // Descriptions help the model
+      },
+      chunkName: {
+        type: "string",
+        description: "The name of the function or code chunk.",
+      },
+      chunkType: {
+        type: "string",
+        description: "e.g., 'function', 'class', 'variable'",
+      },
+      steps: {
+        type: "array",
+        items: { type: "string" },
+        description: "A list of explanatory steps for this chunk.",
+      },
+    },
+    required: ["file", "chunkName", "chunkType", "steps"],
+  },
+};
+
+const generatePromptParts = (batch) => {
+  return batch
+    .map(
+      (f, idx) => `
+### File ${idx + 1}: ${f.file}
+
+${f.code.slice(0, MAX_CODE_PREVIEW_CHARS)}
+`
+    )
+    .join("\n");
+};
+
+const generatePrompt = (batch) => {
+  const promptParts = generatePromptParts(batch);
+
+  return `${STRUCTURED_PROMPT}\n${promptParts}`;
+};
+
+const getAIReview = async (batch) => {
+  const promptText = generatePrompt(batch);
+
+  try {
+    const result = await genAI.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [{ role: "user", parts: [{ text: promptText }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseJsonSchema: AI_RESPONSE_SCHEMA,
+      },
+    });
+
+    const responseText = result?.text?.replace(/```json\n?|\n?```/g, "").trim();
+
+    if (responseText) {
+      const parsedResponse = JSON.parse(responseText);
+      console.log("=== PARSED RESPOSNE ===", parsedResponse);
+      return parsedResponse;
+    }
+
+    return [];
+  } catch (err) {
+    console.error(`❌ Error in batch:`, err);
+    return [];
+  }
+};
+
+/**
+ * Generate a code walkthrough summary for multiple files in one batch.
+ * @param {Array<{file: string, code: string}>} fileChunks - list of changed files
+ * @returns {Promise<Array<{batchIndex: number, summary: string}>>}
+ */
+export async function generateBatchReviews(fileChunks) {
+  const batches = chunkArray(fileChunks, MAX_FILES_PER_BATCH);
+  const allSummaries = [];
+
+  console.log(`Processing ${batches.length} batches...`);
+
+  for (let i = 0; i < batches.length; i++) {
+    console.log(`🧠 Sending batch ${i + 1}/${batches.length} to Gemini...`);
+
+    const batch = batches[i];
+    const aiOverviewResult = await getAIReview(batch);
+    console.log("=== aiOverviewResult ===");
+    allSummaries.push(...aiOverviewResult);
+
+    console.log(`✅ Batch ${i + 1}/${batches.length} processed`);
+  }
+
+  return allSummaries;
+}
