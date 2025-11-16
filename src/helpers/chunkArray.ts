@@ -1,9 +1,9 @@
-// heplers/chunkArray.js
+// helpers/chunkArray.ts
 /**
  * Helper: split an array into chunks of N items
  */
-export function chunkArray(array, size) {
-  const result = [];
+export function chunkArray<T>(array: T[], size: number): T[][] {
+  const result: T[][] = [];
   for (let i = 0; i < array.length; i += size) {
     result.push(array.slice(i, i + size));
   }

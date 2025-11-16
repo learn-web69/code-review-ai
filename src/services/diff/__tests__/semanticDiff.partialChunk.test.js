@@ -1,5 +1,5 @@
 // services/diff/semanticDiff.partialChunk.test.js
-import { extractSemanticDiffChunks } from "../semanticDiff.js";
+import { extractSemanticDiffChunks } from "../semanticDiff.js"; // TODO: convert to .ts
 import assert from "assert";
 
 // Sample JS file with a function that will be partially changed

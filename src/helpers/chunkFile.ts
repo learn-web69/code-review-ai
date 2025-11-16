@@ -1,11 +1,25 @@
-// heplers/chunkFile.js
+// helpers/chunkFile.ts
+/**
+ * Chunk object representing a code snippet
+ */
+export interface CodeChunk {
+  type: "function" | "exportFunction" | "class" | "arrowFunction";
+  name: string;
+  codeSnippet: string;
+}
+
+interface PatternConfig {
+  type: CodeChunk["type"];
+  regex: RegExp;
+}
+
 /**
  * Splits a JS/TS file into chunks (functions, classes, arrow functions)
  */
-export function chunkFile(content) {
-  const chunks = [];
+export function chunkFile(content: string): CodeChunk[] {
+  const chunks: CodeChunk[] = [];
 
-  const patterns = [
+  const patterns: PatternConfig[] = [
     {
       type: "function",
       regex: /function\s+([a-zA-Z0-9_]+)\s*\([^)]*\)\s*{[\s\S]*?^}/gm,

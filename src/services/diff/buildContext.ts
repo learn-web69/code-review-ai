@@ -1,16 +1,33 @@
-// services/diff/buildContext.js
+// services/diff/buildContext.ts
 
+// @ts-ignore - diff2html doesn't have full TS support
 import { parseDiff } from "diff2html/lib/parse.js";
 
-export function extractChangedRanges(patchText) {
+interface FileRange {
+  start: number;
+  end: number;
+}
+
+interface FileRangeResult {
+  file: string;
+  ranges: FileRange[];
+}
+
+interface ContextBlock {
+  start: number;
+  end: number;
+  snippet: string;
+}
+
+export function extractChangedRanges(patchText: string): FileRangeResult[] {
   const parsed = parseDiff(patchText);
 
-  const result = [];
+  const result: FileRangeResult[] = [];
 
-  parsed.forEach((file) => {
-    const fileRanges = [];
+  parsed.forEach((file: any) => {
+    const fileRanges: FileRange[] = [];
 
-    file.hunks.forEach((hunk) => {
+    file.hunks.forEach((hunk: any) => {
       const start = hunk.newStart;
       const end = hunk.newStart + hunk.newLines - 1;
 
@@ -26,9 +43,13 @@ export function extractChangedRanges(patchText) {
   return result;
 }
 
-export function buildContextBlocks(fullFileContent, ranges, radius = 12) {
+export function buildContextBlocks(
+  fullFileContent: string,
+  ranges: FileRange[],
+  radius: number = 12
+): ContextBlock[] {
   const lines = fullFileContent.split("\n");
-  const blocks = [];
+  const blocks: ContextBlock[] = [];
 
   ranges.forEach((range) => {
     const start = Math.max(1, range.start - radius);

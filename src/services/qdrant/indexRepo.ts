@@ -1,9 +1,21 @@
-// services/qdrant/indexRepo.js
+// services/qdrant/indexRepo.ts
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { createHash } from "crypto";
 import { chunkFile } from "../../helpers/chunkFile.js";
 import { getEmbeddingsBatch } from "../ai/embeddings.js";
 import { chunkArray } from "../../helpers/chunkArray.js";
+
+interface FileWithContent {
+  filePath: string;
+  content: string;
+}
+
+interface ChunkData {
+  file: string;
+  chunkName: string;
+  chunkType: string;
+  codeSnippet: string;
+}
 
 const COLLECTION_NAME = process.env.QDRANT_COLLECTION || "code_chunks";
 const VECTOR_SIZE = Number(process.env.EMBEDDING_DIM || 3072); // gemini-embedding-001 returns 3072 dimensions
@@ -22,7 +34,7 @@ const client = new QdrantClient({
 /**
  * Create collection if it doesn't exist.
  */
-async function ensureCollection() {
+async function ensureCollection(): Promise<void> {
   try {
     await client.createCollection(COLLECTION_NAME, {
       vectors: {
@@ -34,17 +46,20 @@ async function ensureCollection() {
       `🟢 Created Qdrant collection "${COLLECTION_NAME}" (size=${VECTOR_SIZE})`
     );
   } catch (err) {
-    const msg = err?.message || String(err);
+    const errAsAny = err as Record<string, unknown>;
+    const msg = (errAsAny?.message as string) || String(err);
     const isAlreadyExists =
       msg.toLowerCase().includes("already exists") ||
-      err?.status === 409 ||
+      (errAsAny?.status as number) === 409 ||
       msg.includes("409");
 
     if (isAlreadyExists) {
       // Check if the existing collection has the correct dimensions
       try {
         const collectionInfo = await client.getCollection(COLLECTION_NAME);
-        const existingDim = collectionInfo.config.params.vectors.size;
+        const existingDim =
+          (collectionInfo.config?.params?.vectors?.size as number) ||
+          VECTOR_SIZE;
 
         if (existingDim !== VECTOR_SIZE) {
           console.log(
@@ -77,7 +92,7 @@ async function ensureCollection() {
 /**
  * Generate a deterministic UUID from file path and chunk name
  */
-function normalizeId(filePath, chunkName) {
+function normalizeId(filePath: string, chunkName: string): string {
   const combined = `${filePath}::${chunkName}`;
   const hash = createHash("sha256").update(combined).digest("hex");
 
@@ -98,18 +113,22 @@ function normalizeId(filePath, chunkName) {
  * Index provided files into Qdrant.
  * `files` is an array: [{ filePath, content }]
  */
-export async function indexRepo(files) {
+export async function indexRepo(files: FileWithContent[]): Promise<number> {
   if (!Array.isArray(files) || files.length === 0) {
     console.log("No files provided to index.");
-    return;
+    return 0;
   }
 
   await ensureCollection();
 
   // 1) Build all semantic chunks from files
-  const allChunks = [];
+  const allChunks: ChunkData[] = [];
   for (const file of files) {
-    const chunks = chunkFile(file.content);
+    const chunks = chunkFile(file.content) as Array<{
+      name: string;
+      type: string;
+      codeSnippet: string;
+    }>;
     if (!chunks || chunks.length === 0) continue;
     for (const chunk of chunks) {
       allChunks.push({
@@ -127,12 +146,12 @@ export async function indexRepo(files) {
 
   if (allChunks.length === 0) {
     console.log("No chunks to index. Exiting.");
-    return;
+    return 0;
   }
 
   // 2) Process in batches: get embeddings in sub-batches (embedding service might also batch)
   // We'll break the allChunks into UPSERT_BATCH sized groups for embedding+upsert.
-  const batches = chunkArray(allChunks, UPSERT_BATCH);
+  const batches = chunkArray(allChunks, UPSERT_BATCH) as ChunkData[][];
   let totalUpserted = 0;
 
   for (let b = 0; b < batches.length; b++) {
@@ -142,11 +161,11 @@ export async function indexRepo(files) {
     );
 
     // Get embeddings for the batch (helper should do batch API)
-    const texts = batch.map((c) => c.codeSnippet);
+    const texts = batch.map((c: ChunkData) => c.codeSnippet);
     const embeddings = await getEmbeddingsBatch(texts); // returns array of vectors
 
     // Build points
-    const points = batch.map((chunk, idx) => ({
+    const points = batch.map((chunk: ChunkData, idx: number) => ({
       id: normalizeId(chunk.file, chunk.chunkName),
       vector: embeddings[idx],
       payload: {

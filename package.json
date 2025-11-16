@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "main": "basicWalkthrough.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "type-check": "tsc --noEmit",
+    "build": "tsc",
+    "dev": "node --loader ts-node/esm",
+    "demo": "node --loader ts-node/esm src/demo.ts",
+    "index": "node --loader ts-node/esm src/scripts/setupIndex.ts"
   },
   "author": "",
   "license": "ISC",
@@ -13,6 +18,11 @@
     "@octokit/rest": "^22.0.1",
     "@qdrant/js-client-rest": "^1.15.1",
     "diff2html": "^3.4.52"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
   },
   "type": "module"
 }

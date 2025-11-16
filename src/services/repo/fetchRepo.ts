@@ -1,4 +1,4 @@
-// services/repo/fetchRepo.js
+// services/repo/fetchRepo.ts
 
 /**
  * Repo Fetcher
@@ -19,6 +19,7 @@
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
+import type { FileContent } from "../../types/index.js";
 import {
   DEFAULT_REPO_URL,
   DEFAULT_REPO_NAME,
@@ -28,7 +29,7 @@ import {
 /**
  * Ensure directory exists
  */
-function ensureDir(dir) {
+function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -38,9 +39,9 @@ function ensureDir(dir) {
  * Clone repo if not exists, otherwise pull latest.
  */
 export function cloneRepo(
-  repoUrl = DEFAULT_REPO_URL,
-  repoName = DEFAULT_REPO_NAME
-) {
+  repoUrl: string = DEFAULT_REPO_URL,
+  repoName: string = DEFAULT_REPO_NAME
+): string {
   const repoPath = path.join(REPOS_ROOT, repoName);
   ensureDir(REPOS_ROOT);
 
@@ -58,7 +59,7 @@ export function cloneRepo(
 /**
  * Recursively collect JS/TS files.
  */
-function getAllFiles(dirPath, collected = []) {
+function getAllFiles(dirPath: string, collected: string[] = []): string[] {
   const files = fs.readdirSync(dirPath);
 
   for (const file of files) {
@@ -82,7 +83,7 @@ function getAllFiles(dirPath, collected = []) {
 /**
  * Read all files in repo.
  */
-export function loadRepoFiles(repoPath) {
+export function loadRepoFiles(repoPath: string): FileContent[] {
   const allFiles = getAllFiles(repoPath);
 
   return allFiles.map((filePath) => ({
@@ -97,9 +98,9 @@ export function loadRepoFiles(repoPath) {
  * - Load files
  */
 export async function fetchRepo(
-  repoUrl = DEFAULT_REPO_URL,
-  repoName = DEFAULT_REPO_NAME
-) {
+  repoUrl: string = DEFAULT_REPO_URL,
+  repoName: string = DEFAULT_REPO_NAME
+): Promise<{ repoPath: string; files: FileContent[] }> {
   const repoPath = cloneRepo(repoUrl, repoName);
   const files = loadRepoFiles(repoPath);
 

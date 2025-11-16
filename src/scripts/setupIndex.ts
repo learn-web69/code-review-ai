@@ -1,10 +1,11 @@
+// scripts/setupIndex.ts
 import { fetchRepo } from "../services/repo/fetchRepo.js";
 import { indexRepo } from "../services/qdrant/indexRepo.js";
 
-async function run() {
+async function run(): Promise<void> {
   try {
     console.log("📦 Fetching repository (clone/pull)...");
-    const { files } = await fetchRepo(); // uses your improved fetchRepo
+    const { files } = await fetchRepo();
 
     console.log(files.map((f) => f.filePath));
 

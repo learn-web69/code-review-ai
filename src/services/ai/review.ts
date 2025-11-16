@@ -1,7 +1,14 @@
-// services/ai/review.js
+// services/ai/review.ts
 import { GoogleGenAI } from "@google/genai";
 import { chunkArray } from "../../helpers/chunkArray.js";
 import { getRelatedChunks } from "../qdrant/retrieve.js";
+import type { AIReviewSummary, QdrantPoint } from "../../types/index.js";
+
+interface FileBatch {
+  file: string;
+  code: string;
+  relatedContext?: string;
+}
 
 const genAI = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -57,7 +64,7 @@ const AI_RESPONSE_SCHEMA = {
   },
 };
 
-const generatePromptParts = (batch) => {
+const generatePromptParts = (batch: FileBatch[]): string => {
   return batch
     .map(
       (f, idx) => `
@@ -72,30 +79,26 @@ ${f.relatedContext || "(no related chunks found)"}
     .join("\n");
 };
 
-const generatePrompt = (batch) => {
+const generatePrompt = (batch: FileBatch[]): string => {
   const promptParts = generatePromptParts(batch);
 
   return `${STRUCTURED_PROMPT}\n${promptParts}`;
 };
 
-const getAIReview = async (batch) => {
+const getAIReview = async (batch: FileBatch[]): Promise<AIReviewSummary[]> => {
   const promptText = generatePrompt(batch);
 
   try {
     const result = await genAI.models.generateContent({
       model: "gemini-2.0-flash",
       contents: [{ role: "user", parts: [{ text: promptText }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseJsonSchema: AI_RESPONSE_SCHEMA,
-      },
-    });
+    } as unknown as Parameters<typeof genAI.models.generateContent>[0]);
 
     const responseText = result?.text?.replace(/```json\n?|\n?```/g, "").trim();
 
     if (responseText) {
-      const parsedResponse = JSON.parse(responseText);
-      console.log("=== PARSED RESPOSNE ===", parsedResponse);
+      const parsedResponse = JSON.parse(responseText) as AIReviewSummary[];
+      console.log("=== PARSED RESPONSE ===", parsedResponse);
       return parsedResponse;
     }
 
@@ -108,12 +111,12 @@ const getAIReview = async (batch) => {
 
 /**
  * Generate a code walkthrough summary for multiple files in one batch.
- * @param {Array<{file: string, code: string}>} fileChunks - list of changed files
- * @returns {Promise<Array<{batchIndex: number, summary: string}>>}
  */
-export async function generateBatchReviews(fileChunks) {
+export async function generateBatchReviews(
+  fileChunks: FileBatch[]
+): Promise<AIReviewSummary[]> {
   const batches = chunkArray(fileChunks, MAX_FILES_PER_BATCH);
-  const allSummaries = [];
+  const allSummaries: AIReviewSummary[] = [];
 
   console.log(`Processing ${batches.length} batches...`);
 
@@ -125,7 +128,7 @@ export async function generateBatchReviews(fileChunks) {
     // Embed Qdrant context
     for (const chunk of batch) {
       const relatedChunks = await getRelatedChunks(chunk.code);
-      chunk.relatedContext = relatedChunks
+      chunk.relatedContext = (relatedChunks as unknown as QdrantPoint[])
         .map(
           (c) => `File: ${c.file}, Function: ${c.chunkName}\n${c.codeSnippet}`
         )

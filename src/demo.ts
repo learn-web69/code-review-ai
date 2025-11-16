@@ -1,10 +1,9 @@
-// demoPRWalkthrough.js
+// demo.ts
 import { getFilesByPR } from "./services/repo/fetchPR.js";
 import { loadRepoFiles } from "./services/repo/fetchRepo.js";
 import {
   DEFAULT_REPO_NAME,
   DEFAULT_REPO_OWNER,
-  DEFAULT_REPO_URL,
   REPOS_ROOT,
 } from "./config/constants.js";
 import { isConfigFile } from "./helpers/isConfigFile.js";
@@ -12,18 +11,30 @@ import { chunkFile } from "./helpers/chunkFile.js";
 import { extractSemanticDiffChunks } from "./services/diff/semanticDiff.js";
 import { generateBatchReviews } from "./services/ai/review.js";
 import { getRelatedChunks } from "./services/qdrant/retrieve.js";
+import type { PRFile, SemanticChunk } from "./types/index.js";
 
 const CONTEXT_LINES = 5; // lines of context around changes
 
-async function demoPRWalkthrough(prNumber) {
+interface WalkthroughStep {
+  file: string;
+  chunkName: string;
+  chunkType: string;
+  step: {
+    description: string;
+    aiExplanation: string;
+    relatedContext: string | undefined;
+  };
+}
+
+async function demoPRWalkthrough(prNumber: number): Promise<void> {
   console.log(`Fetching PR #${prNumber} files...`);
-  const files = await getFilesByPR(
+  const files = (await getFilesByPR(
     prNumber,
     DEFAULT_REPO_OWNER,
     DEFAULT_REPO_NAME
-  );
+  )) as PRFile[];
 
-  const allChunks = [];
+  const allChunks: SemanticChunk[] = [];
 
   for (const file of files) {
     const filePath = file.filename;
@@ -45,13 +56,14 @@ async function demoPRWalkthrough(prNumber) {
       // Retrieve related code from Qdrant
       const relatedChunks = await getRelatedChunks(chunk.codeSnippet, 3);
       console.log("=== RELATED CHUNKS", relatedChunks.length);
-      chunk.relatedContext = relatedChunks
+      (chunk as any).relatedContext = relatedChunks
         .map(
-          (c) => `File: ${c.file}, Function: ${c.chunkName}\n${c.codeSnippet}`
+          (c: any) =>
+            `File: ${c.file}, Function: ${c.chunkName}\n${c.codeSnippet}`
         )
         .join("\n\n");
 
-      allChunks.push(chunk);
+      allChunks.push(chunk as any);
     }
   }
 
@@ -60,10 +72,15 @@ async function demoPRWalkthrough(prNumber) {
     return console.log("No changed chunks found in this PR.");
 
   // 2. Generate AI review using Gemini
-  const batchSummaries = await generateBatchReviews(allChunks);
+  const batchSummaries = await generateBatchReviews(
+    allChunks.map((chunk) => ({
+      file: chunk.file,
+      code: chunk.codeSnippet,
+    }))
+  );
 
   // 3. Map summaries to chunks
-  const walkthroughSteps = allChunks.map((chunk) => {
+  const walkthroughSteps: WalkthroughStep[] = allChunks.map((chunk) => {
     const aiSummary = batchSummaries.find(
       (r) =>
         r.file === chunk.file &&

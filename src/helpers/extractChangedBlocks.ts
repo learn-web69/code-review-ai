@@ -1,31 +1,33 @@
-// helpers/extractChangedBlocks.js
+// helpers/extractChangedBlocks.ts
+import type { CodeBlock } from "../types/index.js";
+
+interface LineData {
+  type: "insert" | "delete" | "unchanged";
+  text: string;
+  oldNumber?: number;
+  newNumber?: number;
+}
 
 /**
  * Parse a unified diff patch and extract changed blocks.
  * The patch is expected to be just the hunks (no file headers from GitHub API).
- *
- * @param {string} filePath - The file path that changed
- * @param {string} patchText - The raw patch text from GitHub API (just the hunks).
- * @returns {Array<{
- *   file: string,
- *   blockHeader: string,
- *   changes: Array<{ type: "insert"|"delete", text: string, oldNumber?: number, newNumber?: number }>,
- *   fullBlockLines: string[]
- * }>}
  */
-export function extractChangedBlocks(filePath, patchText) {
+export function extractChangedBlocks(
+  filePath: string,
+  patchText: string
+): CodeBlock[] {
   if (!patchText || typeof patchText !== "string") {
     return [];
   }
 
-  const results = [];
+  const results: CodeBlock[] = [];
   const lines = patchText.split("\n");
   console.log(
     `[extractChangedBlocks] File: ${filePath}, patch lines: ${lines.length}`
   );
 
-  let currentBlockHeader = null;
-  let blockLines = [];
+  let currentBlockHeader: string | null = null;
+  let blockLines: LineData[] = [];
   let oldLineNum = 0;
   let newLineNum = 0;
   let blockCount = 0;
@@ -42,7 +44,7 @@ export function extractChangedBlocks(filePath, patchText) {
           const changedLines = blockLines.filter(
             (l) => l.type === "insert" || l.type === "delete"
           );
-          if (changedLines.length > 0) {
+          if (changedLines.length > 0 && currentBlockHeader) {
             results.push({
               file: filePath,
               blockHeader: currentBlockHeader,
@@ -98,7 +100,7 @@ export function extractChangedBlocks(filePath, patchText) {
     const changedLines = blockLines.filter(
       (l) => l.type === "insert" || l.type === "delete"
     );
-    if (changedLines.length > 0) {
+    if (changedLines.length > 0 && currentBlockHeader) {
       results.push({
         file: filePath,
         blockHeader: currentBlockHeader,

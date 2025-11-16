@@ -1,5 +1,5 @@
 // services/diff/semanticDiff.extended.test.js
-import { extractSemanticDiffChunks } from "../semanticDiff.js";
+import { extractSemanticDiffChunks } from "../semanticDiff.js"; // TODO: convert to .ts
 import assert from "assert";
 
 /**
