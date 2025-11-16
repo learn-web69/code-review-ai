@@ -9,7 +9,8 @@ Welcome! This document helps you navigate all the documentation for your new API
 1. **[IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)** ← What was built (5 min read)
 2. **[QUICK_REFERENCE.md](./QUICK_REFERENCE.md)** ← Commands & examples (2 min read)
 3. **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)** ← Full endpoint specs (10 min read)
-4. **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** ← How to implement features (15 min read)
+4. **[DEPLOYMENT.md](./DEPLOYMENT.md)** ← Deploy to Vercel (5 min read)
+5. **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** ← How to implement features (15 min read)
 
 ## 📖 Documentation Files
 
@@ -36,6 +37,12 @@ Welcome! This document helps you navigate all the documentation for your new API
 | **ARCHITECTURE.md** | System design & diagrams | Understanding design |
 | **CHECKLIST.md**    | Implementation progress  | Tracking what's done |
 
+### Deployment
+
+| File              | Purpose              | Read When        |
+| ----------------- | -------------------- | ---------------- |
+| **DEPLOYMENT.md** | Deploy to production | Ready to go live |
+
 ### Implementation Guide
 
 | File               | Purpose                   | Read When     |
@@ -56,15 +63,16 @@ Code Review AI Project
 │
 ├── 📄 README.md (root)             ← Main entry point
 │
-├── 📁 docs/ (ALL DOCUMENTATION)
+├── 📁 docs/ (ALL DOCUMENTATION - 9 files)
 │   ├── DOCUMENTATION_INDEX.md      ← Master navigation (you are here!)
 │   ├── GETTING_STARTED.md          ← 3-step quick start
 │   ├── IMPLEMENTATION_SUMMARY.md   ← What was built
-│   ├── QUICK_REFERENCE.md          ← Quick tips
+│   ├── QUICK_REFERENCE.md          ← Quick commands
 │   ├── API_DOCUMENTATION.md        ← API specs
 │   ├── SETUP_GUIDE.md              ← Implementation
 │   ├── ARCHITECTURE.md             ← System design
-│   └── CHECKLIST.md                ← Progress tracking
+│   ├── CHECKLIST.md                ← Progress
+│   └── DEPLOYMENT.md               ← Deploy to Vercel
 │
 ├── 💻 Server Code (IMPLEMENT THESE)
 │   └── src/server/

@@ -14,7 +14,25 @@ bash test-api.sh
 
 The server runs on `http://localhost:3000`
 
-## 📡 API Endpoints
+## 🌐 Deploy to Vercel (Free!)
+
+Deploy your API in 5 minutes with **zero cost**:
+
+```bash
+# 1. Push to GitHub (if not already)
+git add .
+git commit -m "Ready for deployment"
+git push origin main
+
+# 2. Go to https://vercel.com
+# 3. Import your GitHub repo
+# 4. Add environment variables
+# 5. Click Deploy!
+```
+
+👉 **[Full Deployment Guide →](docs/DEPLOYMENT.md)**
+
+Your API will be live at: `https://code-review-ai-xxxxx.vercel.app`
 
 - **GET `/status`** - Check repository indexing status
 - **POST `/init-repository/:repo_id`** - Initialize and index a repository
