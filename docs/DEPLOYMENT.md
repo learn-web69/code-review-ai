@@ -74,7 +74,7 @@ You'll see a configuration screen. Update these settings:
 
 **Root Directory:**
 
-- Keep as: `./` (default)
+- Keep as: `./` (default) — Your `vercel.json` file already specifies `src/server/index.ts` as the entry point
 
 **Build Command:**
 
@@ -83,6 +83,8 @@ You'll see a configuration screen. Update these settings:
 **Output Directory:**
 
 - Change to: `dist`
+
+> **Note:** The `vercel.json` configuration in your repo will override these settings and correctly route all requests to `src/server/index.ts`
 
 ---
 
