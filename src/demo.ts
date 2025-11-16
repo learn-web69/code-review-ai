@@ -1,11 +1,7 @@
 // demo.ts
 import { getFilesByPR } from "./services/repo/fetchPR.js";
-import { fetchRepo } from "./services/repo/fetchRepo.js";
-import {
-  DEFAULT_REPO_NAME,
-  DEFAULT_REPO_OWNER,
-  DEFAULT_REPO_URL,
-} from "./config/constants.js";
+import { fetchRepo, parseGitHubUrl } from "./services/repo/fetchRepo.js";
+import { DEFAULT_REPO_URL } from "./config/constants.js";
 import { isConfigFile } from "./helpers/isConfigFile.js";
 import { chunkFile } from "./helpers/chunkFile.js";
 import { extractSemanticDiffChunks } from "./services/diff/semanticDiff.js";
@@ -28,14 +24,18 @@ interface WalkthroughStep {
 
 async function demoPRWalkthrough(prNumber: number): Promise<void> {
   console.log(`Fetching PR #${prNumber} files...`);
+  
+  // Extract owner and repo from URL
+  const { owner, repo } = parseGitHubUrl(DEFAULT_REPO_URL);
+  
   const files = (await getFilesByPR(
     prNumber,
-    DEFAULT_REPO_OWNER,
-    DEFAULT_REPO_NAME
+    owner,
+    repo
   )) as PRFile[];
 
   // Fetch repo files in memory (GitHub API)
-  const { files: repoFiles } = await fetchRepo(DEFAULT_REPO_URL, DEFAULT_REPO_NAME);
+  const { files: repoFiles } = await fetchRepo(DEFAULT_REPO_URL);
 
   const allChunks: SemanticChunk[] = [];
 
@@ -43,9 +43,7 @@ async function demoPRWalkthrough(prNumber: number): Promise<void> {
     const filePath = file.filename;
     if (isConfigFile(filePath)) continue;
 
-    const fullFile = repoFiles.find((f) =>
-      f.filePath.endsWith(filePath)
-    );
+    const fullFile = repoFiles.find((f) => f.filePath.endsWith(filePath));
     if (!fullFile) continue;
 
     const semanticChunks = extractSemanticDiffChunks(

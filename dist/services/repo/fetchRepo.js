@@ -12,7 +12,7 @@
  * No disk I/O - works on Vercel and other serverless platforms
  */
 import { Octokit } from "@octokit/rest";
-import { DEFAULT_REPO_URL, DEFAULT_REPO_NAME, DEFAULT_REPO_OWNER, } from "../../config/constants.js";
+import { DEFAULT_REPO_URL } from "../../config/constants.js";
 // GitHub API client
 const octokit = new Octokit({
     auth: process.env.GITHUB_TOKEN,
@@ -21,7 +21,7 @@ const octokit = new Octokit({
  * Parse GitHub URL to extract owner and repo
  * Supports: https://github.com/owner/repo or git@github.com:owner/repo.git
  */
-function parseGitHubUrl(repoUrl) {
+export function parseGitHubUrl(repoUrl) {
     // Handle https://github.com/owner/repo format
     const httpsMatch = repoUrl.match(/github\.com\/([^\/]+)\/([^\/\.]+)/);
     if (httpsMatch) {
@@ -92,7 +92,7 @@ async function fetchFilesRecursive(owner, repo, treeSha, basePath = "") {
  * Fetch all repo files from GitHub API (memory-based, no disk storage)
  * Perfect for Vercel and serverless environments
  */
-export async function fetchRepo(repoUrl = DEFAULT_REPO_URL, repoName = DEFAULT_REPO_NAME) {
+export async function fetchRepo(repoUrl = DEFAULT_REPO_URL) {
     try {
         // Parse repository info from URL
         let repoInfo;
@@ -101,7 +101,7 @@ export async function fetchRepo(repoUrl = DEFAULT_REPO_URL, repoName = DEFAULT_R
         }
         catch {
             // Fall back to defaults if URL parsing fails
-            repoInfo = { owner: DEFAULT_REPO_OWNER, repo: repoName };
+            repoInfo = { owner: "default", repo: "default" };
         }
         console.log(`📡 Fetching repository from GitHub API: ${repoInfo.owner}/${repoInfo.repo}...`);
         // Get default branch

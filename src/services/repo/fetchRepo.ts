@@ -15,11 +15,7 @@
 
 import { Octokit } from "@octokit/rest";
 import type { FileContent } from "../../types/index.js";
-import {
-  DEFAULT_REPO_URL,
-  DEFAULT_REPO_NAME,
-  DEFAULT_REPO_OWNER,
-} from "../../config/constants.js";
+import { DEFAULT_REPO_URL } from "../../config/constants.js";
 
 // GitHub API client
 const octokit = new Octokit({
@@ -30,9 +26,7 @@ const octokit = new Octokit({
  * Parse GitHub URL to extract owner and repo
  * Supports: https://github.com/owner/repo or git@github.com:owner/repo.git
  */
-function parseGitHubUrl(
-  repoUrl: string
-): { owner: string; repo: string } {
+export function parseGitHubUrl(repoUrl: string): { owner: string; repo: string } {
   // Handle https://github.com/owner/repo format
   const httpsMatch = repoUrl.match(/github\.com\/([^\/]+)\/([^\/\.]+)/);
   if (httpsMatch) {
@@ -125,18 +119,17 @@ async function fetchFilesRecursive(
  * Perfect for Vercel and serverless environments
  */
 export async function fetchRepo(
-  repoUrl: string = DEFAULT_REPO_URL,
-  repoName: string = DEFAULT_REPO_NAME
+  repoUrl: string = DEFAULT_REPO_URL
 ): Promise<{ files: FileContent[] }> {
   try {
     // Parse repository info from URL
     let repoInfo: { owner: string; repo: string };
-    
+
     try {
       repoInfo = parseGitHubUrl(repoUrl);
     } catch {
       // Fall back to defaults if URL parsing fails
-      repoInfo = { owner: DEFAULT_REPO_OWNER, repo: repoName };
+      repoInfo = { owner: "default", repo: "default" };
     }
 
     console.log(

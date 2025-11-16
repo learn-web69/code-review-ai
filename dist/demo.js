@@ -1,7 +1,7 @@
 // demo.ts
 import { getFilesByPR } from "./services/repo/fetchPR.js";
-import { fetchRepo } from "./services/repo/fetchRepo.js";
-import { DEFAULT_REPO_NAME, DEFAULT_REPO_OWNER, DEFAULT_REPO_URL, } from "./config/constants.js";
+import { fetchRepo, parseGitHubUrl } from "./services/repo/fetchRepo.js";
+import { DEFAULT_REPO_URL } from "./config/constants.js";
 import { isConfigFile } from "./helpers/isConfigFile.js";
 import { extractSemanticDiffChunks } from "./services/diff/semanticDiff.js";
 import { generateBatchReviews } from "./services/ai/review.js";
@@ -9,9 +9,11 @@ import { getRelatedChunks } from "./services/qdrant/retrieve.js";
 const CONTEXT_LINES = 5; // lines of context around changes
 async function demoPRWalkthrough(prNumber) {
     console.log(`Fetching PR #${prNumber} files...`);
-    const files = (await getFilesByPR(prNumber, DEFAULT_REPO_OWNER, DEFAULT_REPO_NAME));
+    // Extract owner and repo from URL
+    const { owner, repo } = parseGitHubUrl(DEFAULT_REPO_URL);
+    const files = (await getFilesByPR(prNumber, owner, repo));
     // Fetch repo files in memory (GitHub API)
-    const { files: repoFiles } = await fetchRepo(DEFAULT_REPO_URL, DEFAULT_REPO_NAME);
+    const { files: repoFiles } = await fetchRepo(DEFAULT_REPO_URL);
     const allChunks = [];
     for (const file of files) {
         const filePath = file.filename;
