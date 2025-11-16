@@ -131,8 +131,9 @@ function generateFileHash(content: string): string {
  */
 export async function isRepoIndexed(repoId: string): Promise<boolean> {
   try {
+    const metadataId = normalizeId(repoId, "metadata", "repo-info");
     const result = await client.retrieve(COLLECTION_NAME, {
-      ids: [`meta_${repoId}`],
+      ids: [metadataId],
     });
     return result.length > 0;
   } catch (err) {
@@ -148,8 +149,9 @@ export async function getRepoMetadata(
   repoId: string
 ): Promise<RepoMetadata | null> {
   try {
+    const metadataId = normalizeId(repoId, "metadata", "repo-info");
     const result = await client.retrieve(COLLECTION_NAME, {
-      ids: [`meta_${repoId}`],
+      ids: [metadataId],
     });
     if (result.length > 0) {
       return result[0].payload as unknown as RepoMetadata;
@@ -171,25 +173,33 @@ async function markRepoAsIndexed(
   chunkCount: number,
   filesIndexed: number
 ): Promise<void> {
-  const metadataPoint = {
-    id: `meta_${repoId}`,
-    vector: new Array(VECTOR_SIZE).fill(0), // Dummy vector
-    payload: {
-      type: "metadata",
-      repoId,
-      repoName,
-      lastCommit,
-      chunkCount,
-      filesIndexed,
-      indexedAt: new Date().toISOString(),
-    },
-  };
+  try {
+    // Create a deterministic UUID for the metadata point
+    const metadataId = normalizeId(repoId, "metadata", "repo-info");
 
-  await client.upsert(COLLECTION_NAME, {
-    points: [metadataPoint],
-  });
+    const metadataPoint = {
+      id: metadataId,
+      vector: new Array(VECTOR_SIZE).fill(0.1), // Dummy vector with small values
+      payload: {
+        type: "metadata",
+        repoId,
+        repoName,
+        lastCommit,
+        chunkCount,
+        filesIndexed,
+        indexedAt: new Date().toISOString(),
+      },
+    };
 
-  console.log(`✅ Metadata point created for repo: ${repoId}`);
+    await client.upsert(COLLECTION_NAME, {
+      points: [metadataPoint],
+    });
+
+    console.log(`✅ Metadata point created for repo: ${repoId}`);
+  } catch (err) {
+    console.error(`⚠️ Error creating metadata point: ${err}`);
+    throw err;
+  }
 }
 
 /**
