@@ -1,0 +1,1 @@
+{"version":3,"file":"chunkFile.d.ts","sourceRoot":"","sources":["../../src/helpers/chunkFile.ts"],"names":[],"mappings":"AACA;;GAEG;AACH,MAAM,WAAW,SAAS;IACxB,IAAI,EAAE,UAAU,GAAG,gBAAgB,GAAG,OAAO,GAAG,eAAe,CAAC;IAChE,IAAI,EAAE,MAAM,CAAC;IACb,WAAW,EAAE,MAAM,CAAC;CACrB;AAOD;;GAEG;AACH,wBAAgB,SAAS,CAAC,OAAO,EAAE,MAAM,GAAG,SAAS,EAAE,CA+BtD"}

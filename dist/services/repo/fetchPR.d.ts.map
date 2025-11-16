@@ -1,0 +1,1 @@
+{"version":3,"file":"fetchPR.d.ts","sourceRoot":"","sources":["../../../src/services/repo/fetchPR.ts"],"names":[],"mappings":"AAGA,OAAO,KAAK,EAAE,MAAM,EAAE,MAAM,sBAAsB,CAAC;AAInD,eAAO,MAAM,YAAY,GACvB,YAAY,MAAM,EAClB,OAAO,MAAM,EACb,MAAM,MAAM,KACX,OAAO,CAAC,MAAM,EAAE,CAQlB,CAAC"}
