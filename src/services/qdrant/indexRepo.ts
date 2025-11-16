@@ -15,13 +15,22 @@ interface ChunkData {
   chunkName: string;
   chunkType: string;
   codeSnippet: string;
+  fileHash: string; // Hash of the file content for change detection
+}
+
+interface RepoMetadata {
+  repoId: string;
+  repoName: string;
+  lastCommit: string;
+  chunkCount: number;
+  filesIndexed: number;
+  indexedAt: string;
 }
 
 const COLLECTION_NAME = process.env.QDRANT_COLLECTION || "code_chunks";
-const VECTOR_SIZE = Number(process.env.EMBEDDING_DIM || 3072); // gemini-embedding-001 returns 3072 dimensions
-const UPSERT_BATCH = Number(process.env.QDRANT_UPSERT_BATCH || 64); // upsert N points at once
+const VECTOR_SIZE = Number(process.env.EMBEDDING_DIM || 3072);
+const UPSERT_BATCH = Number(process.env.QDRANT_UPSERT_BATCH || 64);
 
-// Validate required environment variables
 if (!process.env.QDRANT_URL) {
   throw new Error("❌ Missing required environment variable: QDRANT_URL");
 }
@@ -54,7 +63,6 @@ async function ensureCollection(): Promise<void> {
       msg.includes("409");
 
     if (isAlreadyExists) {
-      // Check if the existing collection has the correct dimensions
       try {
         const collectionInfo = await client.getCollection(COLLECTION_NAME);
         const existingDim =
@@ -90,14 +98,16 @@ async function ensureCollection(): Promise<void> {
 }
 
 /**
- * Generate a deterministic UUID from file path and chunk name
+ * Generate a deterministic UUID from repo, file path and chunk name
  */
-function normalizeId(filePath: string, chunkName: string): string {
-  const combined = `${filePath}::${chunkName}`;
+function normalizeId(
+  repoId: string,
+  filePath: string,
+  chunkName: string
+): string {
+  const combined = `${repoId}::${filePath}::${chunkName}`;
   const hash = createHash("sha256").update(combined).digest("hex");
 
-  // Convert hash to UUID format (v5-like, though not strictly v5)
-  // Format: 8-4-4-4-12 hex digits
   const uuid = [
     hash.substring(0, 8),
     hash.substring(8, 12),
@@ -110,12 +120,169 @@ function normalizeId(filePath: string, chunkName: string): string {
 }
 
 /**
- * Index provided files into Qdrant.
- * `files` is an array: [{ filePath, content }]
+ * Generate file hash for change detection
  */
-export async function indexRepo(files: FileWithContent[]): Promise<number> {
+function generateFileHash(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+/**
+ * Check if repository is already indexed
+ */
+export async function isRepoIndexed(repoId: string): Promise<boolean> {
+  try {
+    const result = await client.retrieve(COLLECTION_NAME, {
+      ids: [`meta_${repoId}`],
+    });
+    return result.length > 0;
+  } catch (err) {
+    console.log(`Error checking repo: ${err}`);
+    return false;
+  }
+}
+
+/**
+ * Get repository metadata
+ */
+export async function getRepoMetadata(
+  repoId: string
+): Promise<RepoMetadata | null> {
+  try {
+    const result = await client.retrieve(COLLECTION_NAME, {
+      ids: [`meta_${repoId}`],
+    });
+    if (result.length > 0) {
+      return result[0].payload as unknown as RepoMetadata;
+    }
+    return null;
+  } catch (err) {
+    console.log(`Error getting repo metadata: ${err}`);
+    return null;
+  }
+}
+
+/**
+ * Create or update metadata point for a repository
+ */
+async function markRepoAsIndexed(
+  repoId: string,
+  repoName: string,
+  lastCommit: string,
+  chunkCount: number,
+  filesIndexed: number
+): Promise<void> {
+  const metadataPoint = {
+    id: `meta_${repoId}`,
+    vector: new Array(VECTOR_SIZE).fill(0), // Dummy vector
+    payload: {
+      type: "metadata",
+      repoId,
+      repoName,
+      lastCommit,
+      chunkCount,
+      filesIndexed,
+      indexedAt: new Date().toISOString(),
+    },
+  };
+
+  await client.upsert(COLLECTION_NAME, {
+    points: [metadataPoint],
+  });
+
+  console.log(`✅ Metadata point created for repo: ${repoId}`);
+}
+
+/**
+ * Delete all points for a specific repository
+ */
+export async function deleteRepo(repoId: string): Promise<void> {
+  try {
+    await client.delete(COLLECTION_NAME, {
+      filter: {
+        must: [
+          {
+            key: "repoId",
+            match: { value: repoId },
+          },
+        ],
+      },
+    });
+    console.log(`🗑️ Deleted all data for repo: ${repoId}`);
+  } catch (err) {
+    console.error(`Error deleting repo: ${err}`);
+    throw err;
+  }
+}
+
+/**
+ * List all indexed repositories
+ */
+export async function listAllRepos(): Promise<RepoMetadata[]> {
+  const repos: RepoMetadata[] = [];
+  let offset: string | number | undefined = undefined;
+
+  try {
+    while (true) {
+      const result = await client.scroll(COLLECTION_NAME, {
+        filter: {
+          must: [
+            {
+              key: "type",
+              match: { value: "metadata" },
+            },
+          ],
+        },
+        limit: 100,
+        offset,
+        with_vector: false,
+      });
+
+      const points = result.points || [];
+      for (const point of points) {
+        repos.push(point.payload as unknown as RepoMetadata);
+      }
+
+      if (!result.next_page_offset) {
+        break;
+      }
+      offset = result.next_page_offset as string | number | undefined;
+    }
+  } catch (err) {
+    console.error(`Error listing repos: ${err}`);
+  }
+
+  return repos;
+}
+
+/**
+ * Index provided files into Qdrant with repository metadata.
+ *
+ * @param repoId - Unique identifier for the repository (e.g., "owner_reponame")
+ * @param repoName - Human-readable repository name
+ * @param lastCommit - Git commit hash
+ * @param files - Array of files with content
+ * @returns Total number of chunks upserted
+ */
+export async function indexRepo(
+  repoId: string,
+  repoName: string,
+  lastCommit: string,
+  files: FileWithContent[]
+): Promise<number> {
   if (!Array.isArray(files) || files.length === 0) {
     console.log("No files provided to index.");
+    return 0;
+  }
+
+  // Check if already indexed
+  if (await isRepoIndexed(repoId)) {
+    const metadata = await getRepoMetadata(repoId);
+    console.log(
+      `⚠️ Repository "${repoId}" is already indexed (commit: ${metadata?.lastCommit})`
+    );
+    console.log(
+      `💡 Use deleteRepo() first if you want to re-index, or check commit hash for updates`
+    );
     return 0;
   }
 
@@ -123,25 +290,33 @@ export async function indexRepo(files: FileWithContent[]): Promise<number> {
 
   // 1) Build all semantic chunks from files
   const allChunks: ChunkData[] = [];
+  const uniqueFiles = new Set<string>();
+
   for (const file of files) {
+    uniqueFiles.add(file.filePath);
+    const fileHash = generateFileHash(file.content);
+
     const chunks = chunkFile(file.content) as Array<{
       name: string;
       type: string;
       codeSnippet: string;
     }>;
+
     if (!chunks || chunks.length === 0) continue;
+
     for (const chunk of chunks) {
       allChunks.push({
         file: file.filePath,
         chunkName: chunk.name || "anonymous",
         chunkType: chunk.type || "unknown",
         codeSnippet: chunk.codeSnippet,
+        fileHash,
       });
     }
   }
 
   console.log(
-    `Prepared ${allChunks.length} chunks from ${files.length} files.`
+    `Prepared ${allChunks.length} chunks from ${files.length} files for repo: ${repoId}`
   );
 
   if (allChunks.length === 0) {
@@ -149,8 +324,7 @@ export async function indexRepo(files: FileWithContent[]): Promise<number> {
     return 0;
   }
 
-  // 2) Process in batches: get embeddings in sub-batches (embedding service might also batch)
-  // We'll break the allChunks into UPSERT_BATCH sized groups for embedding+upsert.
+  // 2) Process in batches: get embeddings and upsert
   const batches = chunkArray(allChunks, UPSERT_BATCH) as ChunkData[][];
   let totalUpserted = 0;
 
@@ -160,23 +334,24 @@ export async function indexRepo(files: FileWithContent[]): Promise<number> {
       `Embedding batch ${b + 1}/${batches.length} (size=${batch.length})...`
     );
 
-    // Get embeddings for the batch (helper should do batch API)
     const texts = batch.map((c: ChunkData) => c.codeSnippet);
-    const embeddings = await getEmbeddingsBatch(texts); // returns array of vectors
+    const embeddings = await getEmbeddingsBatch(texts);
 
-    // Build points
     const points = batch.map((chunk: ChunkData, idx: number) => ({
-      id: normalizeId(chunk.file, chunk.chunkName),
+      id: normalizeId(repoId, chunk.file, chunk.chunkName),
       vector: embeddings[idx],
       payload: {
+        type: "code_chunk", // Important: distinguish from metadata
+        repoId,
+        repoName,
         file: chunk.file,
+        fileHash: chunk.fileHash,
         chunkName: chunk.chunkName,
         chunkType: chunk.chunkType,
         codeSnippet: chunk.codeSnippet,
       },
     }));
 
-    // Upsert into Qdrant
     await client.upsert(COLLECTION_NAME, {
       points,
     });
@@ -187,6 +362,54 @@ export async function indexRepo(files: FileWithContent[]): Promise<number> {
     );
   }
 
+  // 3) Create metadata point AFTER successful indexing
+  await markRepoAsIndexed(
+    repoId,
+    repoName,
+    lastCommit,
+    totalUpserted,
+    uniqueFiles.size
+  );
+
   console.log(`✅ Indexing finished. Total points upserted: ${totalUpserted}`);
   return totalUpserted;
+}
+
+/**
+ * Search for similar code chunks
+ */
+export async function searchCode(
+  queryVector: number[],
+  repoId?: string,
+  limit: number = 10
+): Promise<any[]> {
+  const filter: Record<string, any> = {
+    must: [
+      {
+        key: "type",
+        match: { value: "code_chunk" }, // Exclude metadata points
+      },
+    ],
+  };
+
+  // Optionally filter by specific repo
+  if (repoId) {
+    (filter.must as any[]).push({
+      key: "repoId",
+      match: { value: repoId },
+    });
+  }
+
+  try {
+    const results = await client.search(COLLECTION_NAME, {
+      vector: queryVector,
+      filter,
+      limit,
+    });
+
+    return results;
+  } catch (err) {
+    console.error(`Error searching code: ${err}`);
+    throw err;
+  }
 }

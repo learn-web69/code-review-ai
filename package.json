@@ -10,7 +10,7 @@
     "demo": "node --loader ts-node/esm src/demo.ts",
     "index": "node --loader ts-node/esm src/scripts/setupIndex.ts",
     "server": "node --loader ts-node/esm src/server/index.ts",
-    "server:dev": "node --loader ts-node/esm src/server/index.ts",
+    "server:dev": "node --env-file=.env --loader ts-node/esm src/server/index.ts",
     "start": "node dist/server/index.js"
   },
   "engines": {
