@@ -1,3 +1,4 @@
 .env
 tempRepo
 node_modules
+dist
