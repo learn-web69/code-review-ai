@@ -1,5 +1,7 @@
+// services/ai/review.js
 import { GoogleGenAI } from "@google/genai";
 import { chunkArray } from "../../helpers/chunkArray.js";
+import { getRelatedChunks } from "../qdrant/retrieve.js";
 
 const genAI = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -62,6 +64,9 @@ const generatePromptParts = (batch) => {
 ### File ${idx + 1}: ${f.file}
 
 ${f.code.slice(0, MAX_CODE_PREVIEW_CHARS)}
+
+RELATED CONTEXT:
+${f.relatedContext || "(no related chunks found)"}
 `
     )
     .join("\n");
@@ -116,8 +121,18 @@ export async function generateBatchReviews(fileChunks) {
     console.log(`🧠 Sending batch ${i + 1}/${batches.length} to Gemini...`);
 
     const batch = batches[i];
+
+    // Embed Qdrant context
+    for (const chunk of batch) {
+      const relatedChunks = await getRelatedChunks(chunk.code);
+      chunk.relatedContext = relatedChunks
+        .map(
+          (c) => `File: ${c.file}, Function: ${c.chunkName}\n${c.codeSnippet}`
+        )
+        .join("\n\n");
+    }
+
     const aiOverviewResult = await getAIReview(batch);
-    console.log("=== aiOverviewResult ===");
     allSummaries.push(...aiOverviewResult);
 
     console.log(`✅ Batch ${i + 1}/${batches.length} processed`);

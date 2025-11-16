@@ -1,3 +1,5 @@
+// services/diff/buildContext.js
+
 import { parseDiff } from "diff2html/lib/parse.js";
 
 export function extractChangedRanges(patchText) {

@@ -1,3 +1,5 @@
+// heplers/isConfigFile.js
+
 // Simple helper to skip config files
 export function isConfigFile(filePath) {
   return (

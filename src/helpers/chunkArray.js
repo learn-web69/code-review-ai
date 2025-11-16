@@ -1,3 +1,4 @@
+// heplers/chunkArray.js
 /**
  * Helper: split an array into chunks of N items
  */

@@ -1,3 +1,4 @@
+// heplers/chunkFile.js
 /**
  * Splits a JS/TS file into chunks (functions, classes, arrow functions)
  */
