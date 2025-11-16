@@ -8,7 +8,9 @@
     "build": "tsc",
     "dev": "node --loader ts-node/esm",
     "demo": "node --loader ts-node/esm src/demo.ts",
-    "index": "node --loader ts-node/esm src/scripts/setupIndex.ts"
+    "index": "node --loader ts-node/esm src/scripts/setupIndex.ts",
+    "server": "node --loader ts-node/esm src/server/index.ts",
+    "server:dev": "node --loader ts-node/esm src/server/index.ts"
   },
   "author": "",
   "license": "ISC",
@@ -17,7 +19,9 @@
     "@google/genai": "^1.29.1",
     "@octokit/rest": "^22.0.1",
     "@qdrant/js-client-rest": "^1.15.1",
-    "diff2html": "^3.4.52"
+    "@types/express": "^5.0.5",
+    "diff2html": "^3.4.52",
+    "express": "^5.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
