@@ -24,15 +24,11 @@ interface WalkthroughStep {
 
 async function demoPRWalkthrough(prNumber: number): Promise<void> {
   console.log(`Fetching PR #${prNumber} files...`);
-  
+
   // Extract owner and repo from URL
   const { owner, repo } = parseGitHubUrl(DEFAULT_REPO_URL);
-  
-  const files = (await getFilesByPR(
-    prNumber,
-    owner,
-    repo
-  )) as PRFile[];
+
+  const files = (await getFilesByPR(prNumber, owner, repo)) as PRFile[];
 
   // Fetch repo files in memory (GitHub API)
   const { files: repoFiles } = await fetchRepo(DEFAULT_REPO_URL);

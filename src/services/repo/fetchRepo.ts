@@ -26,7 +26,10 @@ const octokit = new Octokit({
  * Parse GitHub URL to extract owner and repo
  * Supports: https://github.com/owner/repo or git@github.com:owner/repo.git
  */
-export function parseGitHubUrl(repoUrl: string): { owner: string; repo: string } {
+export function parseGitHubUrl(repoUrl: string): {
+  owner: string;
+  repo: string;
+} {
   // Handle https://github.com/owner/repo format
   const httpsMatch = repoUrl.match(/github\.com\/([^\/]+)\/([^\/\.]+)/);
   if (httpsMatch) {

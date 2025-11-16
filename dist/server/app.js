@@ -1,5 +1,6 @@
 // server/app.ts
 import express from "express";
+import { indexRepositoryFromUrl } from "../services/repo/indexService.js";
 const app = express();
 // Middleware
 app.use(express.json());
@@ -18,31 +19,36 @@ app.get("/status", (req, res) => {
         message: "Status check endpoint - implementation pending",
     });
 });
-app.post("/init-repository/:repo_id", (req, res) => {
-    const { repo_id } = req.params;
-    const { repo_url, branch = "main" } = req.body || {};
-    console.log(`[API] POST /init-repository/${repo_id} - Initializing repository`);
-    console.log(`  - Repo URL: ${repo_url || "not provided"}`);
-    console.log(`  - Branch: ${branch}`);
+app.post("/init-repository", async (req, res) => {
+    const { repo_url } = req.body || {};
+    if (!repo_url) {
+        console.log("[API] POST /init-repository - Missing repo_url in body");
+        return res.status(400).json({
+            error: "repo_url is required in request body",
+            example: { repo_url: "https://github.com/user/repo" },
+        });
+    }
+    console.log(`[API] POST /init-repository - Initializing repository: ${repo_url}`);
+    // Return 202 Accepted immediately
     res.status(202).json({
         status: "processing",
-        repo_id,
-        message: "Repository initialization started - full implementation pending",
-        steps: [
-            "Clone/update repository",
-            "Extract semantic chunks",
-            "Generate embeddings",
-            "Create Qdrant collection",
-            "Store vectors",
-            "Mark repository as ready",
-        ],
+        repo_url,
+        message: "Repository initialization started",
+    });
+    // Start indexing in background (don't await)
+    indexRepositoryFromUrl(repo_url)
+        .then((result) => {
+        console.log(`[API] Indexing completed for ${repo_url}:`, result);
+    })
+        .catch((err) => {
+        console.error(`[API] Indexing failed for ${repo_url}:`, err);
     });
 });
 app.post("/review-pr/:pr_number", (req, res) => {
     const { pr_number } = req.params;
-    const { repo_id, owner, repo } = req.body || {};
+    const { repo_url, owner, repo } = req.body || {};
     console.log(`[API] POST /review-pr/${pr_number} - Starting PR review`);
-    console.log(`  - Repo ID: ${repo_id || "not provided"}`);
+    console.log(`  - Repo URL: ${repo_url || "not provided"}`);
     console.log(`  - Owner: ${owner || "not provided"}`);
     console.log(`  - Repo: ${repo || "not provided"}`);
     res.status(202).json({
@@ -60,9 +66,9 @@ app.post("/review-pr/:pr_number", (req, res) => {
     });
 });
 app.post("/tools/review", (req, res) => {
-    const { repo_id, code, question, context } = req.body || {};
+    const { repo_url, code, question, context } = req.body || {};
     console.log("[API] POST /tools/review - Live code analysis requested");
-    console.log(`  - Repo ID: ${repo_id || "not provided"}`);
+    console.log(`  - Repo URL: ${repo_url || "not provided"}`);
     console.log(`  - Question: ${question || "not provided"}`);
     console.log(`  - Code snippet provided: ${!!code}`);
     console.log(`  - Additional context: ${context || "not provided"}`);
