@@ -1,10 +1,10 @@
 // demo.ts
 import { getFilesByPR } from "./services/repo/fetchPR.js";
-import { loadRepoFiles } from "./services/repo/fetchRepo.js";
+import { fetchRepo } from "./services/repo/fetchRepo.js";
 import {
   DEFAULT_REPO_NAME,
   DEFAULT_REPO_OWNER,
-  REPOS_ROOT,
+  DEFAULT_REPO_URL,
 } from "./config/constants.js";
 import { isConfigFile } from "./helpers/isConfigFile.js";
 import { chunkFile } from "./helpers/chunkFile.js";
@@ -34,13 +34,16 @@ async function demoPRWalkthrough(prNumber: number): Promise<void> {
     DEFAULT_REPO_NAME
   )) as PRFile[];
 
+  // Fetch repo files in memory (GitHub API)
+  const { files: repoFiles } = await fetchRepo(DEFAULT_REPO_URL, DEFAULT_REPO_NAME);
+
   const allChunks: SemanticChunk[] = [];
 
   for (const file of files) {
     const filePath = file.filename;
     if (isConfigFile(filePath)) continue;
 
-    const fullFile = loadRepoFiles(REPOS_ROOT).find((f) =>
+    const fullFile = repoFiles.find((f) =>
       f.filePath.endsWith(filePath)
     );
     if (!fullFile) continue;

@@ -1,86 +1,130 @@
 // services/repo/fetchRepo.ts
 /**
- * Repo Fetcher
+ * Repo Fetcher (Memory-based using GitHub API)
  *
  * Responsibilities:
- * - Clone a GitHub repo into temp folder (only when needed)
- * - Pull latest changes if repo already exists
- * - Recursively read all JS/TS/JSX/TSX files
+ * - Fetch repository files from GitHub API (no disk storage)
+ * - Keep all data in memory
+ * - Support Vercel serverless environment
+ * - Recursively fetch JS/TS/JSX/TSX files
  * - Return structured list of files { filePath, content }
  *
- * This version does NOT clone on import, which is important for:
- * - Indexing scripts
- * - Background jobs
- * - Multi-repo support
- * - Qdrant + RAG indexing flows
+ * No disk I/O - works on Vercel and other serverless platforms
  */
-import fs from "fs";
-import path from "path";
-import { execSync } from "child_process";
-import { DEFAULT_REPO_URL, DEFAULT_REPO_NAME, REPOS_ROOT, } from "../../config/constants.js";
+import { Octokit } from "@octokit/rest";
+import { DEFAULT_REPO_URL, DEFAULT_REPO_NAME, DEFAULT_REPO_OWNER, } from "../../config/constants.js";
+// GitHub API client
+const octokit = new Octokit({
+    auth: process.env.GITHUB_TOKEN,
+});
 /**
- * Ensure directory exists
+ * Parse GitHub URL to extract owner and repo
+ * Supports: https://github.com/owner/repo or git@github.com:owner/repo.git
  */
-function ensureDir(dir) {
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+function parseGitHubUrl(repoUrl) {
+    // Handle https://github.com/owner/repo format
+    const httpsMatch = repoUrl.match(/github\.com\/([^\/]+)\/([^\/\.]+)/);
+    if (httpsMatch) {
+        return { owner: httpsMatch[1], repo: httpsMatch[2] };
     }
+    // Handle git@github.com:owner/repo.git format
+    const sshMatch = repoUrl.match(/github\.com:([^\/]+)\/([^\/\.]+)/);
+    if (sshMatch) {
+        return { owner: sshMatch[1], repo: sshMatch[2] };
+    }
+    throw new Error(`Invalid GitHub URL: ${repoUrl}`);
 }
 /**
- * Clone repo if not exists, otherwise pull latest.
+ * Check if file should be included (JS/TS/JSX/TSX)
  */
-export function cloneRepo(repoUrl = DEFAULT_REPO_URL, repoName = DEFAULT_REPO_NAME) {
-    const repoPath = path.join(REPOS_ROOT, repoName);
-    ensureDir(REPOS_ROOT);
-    if (!fs.existsSync(repoPath)) {
-        console.log(`🔄 Cloning repository ${repoUrl} ...`);
-        execSync(`git clone ${repoUrl} ${repoPath}`, { stdio: "inherit" });
-    }
-    else {
-        console.log(`🔄 Repo found. Pulling latest for ${repoName} ...`);
-        execSync(`git -C ${repoPath} pull`, { stdio: "inherit" });
-    }
-    return repoPath;
+function shouldIncludeFile(filePath) {
+    return (filePath.endsWith(".js") ||
+        filePath.endsWith(".ts") ||
+        filePath.endsWith(".jsx") ||
+        filePath.endsWith(".tsx"));
 }
 /**
- * Recursively collect JS/TS files.
+ * Recursively fetch files from GitHub using tree API
+ * Returns all matching files with their content
  */
-function getAllFiles(dirPath, collected = []) {
-    const files = fs.readdirSync(dirPath);
-    for (const file of files) {
-        const fullPath = path.join(dirPath, file);
-        if (fs.statSync(fullPath).isDirectory()) {
-            getAllFiles(fullPath, collected);
+async function fetchFilesRecursive(owner, repo, treeSha, basePath = "") {
+    const files = [];
+    try {
+        // Get tree data from GitHub API
+        const response = await octokit.git.getTree({
+            owner,
+            repo,
+            tree_sha: treeSha,
+            recursive: "1",
+        });
+        // Filter files we care about
+        const relevantFiles = response.data.tree.filter((item) => item.type === "blob" && shouldIncludeFile(item.path));
+        // Fetch content for each file
+        for (const file of relevantFiles) {
+            try {
+                const contentResponse = await octokit.repos.getContent({
+                    owner,
+                    repo,
+                    path: file.path,
+                });
+                // Content is base64 encoded in the API response
+                if ("content" in contentResponse.data) {
+                    const content = Buffer.from(contentResponse.data.content, "base64").toString("utf-8");
+                    files.push({
+                        filePath: file.path,
+                        content,
+                    });
+                }
+            }
+            catch (err) {
+                console.warn(`⚠️ Failed to fetch file ${file.path}:`, err);
+                // Continue with next file
+            }
         }
-        else if (file.endsWith(".js") ||
-            file.endsWith(".ts") ||
-            file.endsWith(".jsx") ||
-            file.endsWith(".tsx")) {
-            collected.push(fullPath);
-        }
     }
-    return collected;
+    catch (err) {
+        console.error(`❌ Error fetching tree from GitHub:`, err);
+        throw err;
+    }
+    return files;
 }
 /**
- * Read all files in repo.
- */
-export function loadRepoFiles(repoPath) {
-    const allFiles = getAllFiles(repoPath);
-    return allFiles.map((filePath) => ({
-        filePath,
-        content: fs.readFileSync(filePath, "utf-8"),
-    }));
-}
-/**
- * Full pipeline:
- * - Clone/pull
- * - Load files
+ * Fetch all repo files from GitHub API (memory-based, no disk storage)
+ * Perfect for Vercel and serverless environments
  */
 export async function fetchRepo(repoUrl = DEFAULT_REPO_URL, repoName = DEFAULT_REPO_NAME) {
-    const repoPath = cloneRepo(repoUrl, repoName);
-    const files = loadRepoFiles(repoPath);
-    return {
-        repoPath,
-        files,
-    };
+    try {
+        // Parse repository info from URL
+        let repoInfo;
+        try {
+            repoInfo = parseGitHubUrl(repoUrl);
+        }
+        catch {
+            // Fall back to defaults if URL parsing fails
+            repoInfo = { owner: DEFAULT_REPO_OWNER, repo: repoName };
+        }
+        console.log(`📡 Fetching repository from GitHub API: ${repoInfo.owner}/${repoInfo.repo}...`);
+        // Get default branch
+        const repoInfo_response = await octokit.repos.get({
+            owner: repoInfo.owner,
+            repo: repoInfo.repo,
+        });
+        const defaultBranch = repoInfo_response.data.default_branch;
+        console.log(`📌 Using branch: ${defaultBranch}`);
+        // Get the tree SHA for the default branch
+        const refResponse = await octokit.git.getRef({
+            owner: repoInfo.owner,
+            repo: repoInfo.repo,
+            ref: `heads/${defaultBranch}`,
+        });
+        const treeSha = refResponse.data.object.sha;
+        // Fetch all files recursively
+        const files = await fetchFilesRecursive(repoInfo.owner, repoInfo.repo, treeSha);
+        console.log(`✅ Fetched ${files.length} files from GitHub API`);
+        return { files };
+    }
+    catch (err) {
+        console.error("❌ Repository fetch failed:", err);
+        throw err;
+    }
 }

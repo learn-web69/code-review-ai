@@ -1,7 +1,7 @@
 // demo.ts
 import { getFilesByPR } from "./services/repo/fetchPR.js";
-import { loadRepoFiles } from "./services/repo/fetchRepo.js";
-import { DEFAULT_REPO_NAME, DEFAULT_REPO_OWNER, REPOS_ROOT, } from "./config/constants.js";
+import { fetchRepo } from "./services/repo/fetchRepo.js";
+import { DEFAULT_REPO_NAME, DEFAULT_REPO_OWNER, DEFAULT_REPO_URL, } from "./config/constants.js";
 import { isConfigFile } from "./helpers/isConfigFile.js";
 import { extractSemanticDiffChunks } from "./services/diff/semanticDiff.js";
 import { generateBatchReviews } from "./services/ai/review.js";
@@ -10,12 +10,14 @@ const CONTEXT_LINES = 5; // lines of context around changes
 async function demoPRWalkthrough(prNumber) {
     console.log(`Fetching PR #${prNumber} files...`);
     const files = (await getFilesByPR(prNumber, DEFAULT_REPO_OWNER, DEFAULT_REPO_NAME));
+    // Fetch repo files in memory (GitHub API)
+    const { files: repoFiles } = await fetchRepo(DEFAULT_REPO_URL, DEFAULT_REPO_NAME);
     const allChunks = [];
     for (const file of files) {
         const filePath = file.filename;
         if (isConfigFile(filePath))
             continue;
-        const fullFile = loadRepoFiles(REPOS_ROOT).find((f) => f.filePath.endsWith(filePath));
+        const fullFile = repoFiles.find((f) => f.filePath.endsWith(filePath));
         if (!fullFile)
             continue;
         const semanticChunks = extractSemanticDiffChunks(filePath, fullFile.content, file.patch, CONTEXT_LINES);
