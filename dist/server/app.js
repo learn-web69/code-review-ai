@@ -4,6 +4,7 @@ import { indexRepositoryFromUrl } from "../services/repo/indexService.js";
 import { isRepoIndexed, getRepoMetadata, listAllRepos, deleteRepo, } from "../services/qdrant/indexRepo.js";
 import { parseGitHubUrl } from "../services/repo/fetchRepo.js";
 import { reviewPRWalkthrough } from "../services/ai/high-level-review.js";
+import toolsReviewRouter from "./routes/toolsReview.js";
 const app = express();
 // Middleware
 app.use(express.json());
@@ -204,23 +205,8 @@ app.post("/review-pr", async (req, res) => {
         });
     }
 });
-app.post("/tools/review", (req, res) => {
-    const { repo_url, code, question, context } = req.body || {};
-    console.log("[API] POST /tools/review - Live code analysis requested");
-    console.log(`  - Repo URL: ${repo_url || "not provided"}`);
-    console.log(`  - Question: ${question || "not provided"}`);
-    console.log(`  - Code snippet provided: ${!!code}`);
-    console.log(`  - Additional context: ${context || "not provided"}`);
-    res.json({
-        status: "success",
-        message: "Live review tool called - implementation pending",
-        analysis: {
-            summary: "Placeholder explanation - full implementation pending",
-            relatedContext: [],
-            previousSteps: [],
-        },
-    });
-});
+// Mount routes
+app.use("/tools/review", toolsReviewRouter);
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error("[API Error]", err);

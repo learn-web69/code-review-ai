@@ -31,24 +31,40 @@ export interface ReviewPRResponse {
     steps: string[] | ReviewStep[];
 }
 export interface ToolsReviewRequest {
-    repo_id?: string;
+    repo_id: string;
+    file?: string;
+    line?: string;
     code?: string;
-    question?: string;
-    context?: string;
+    question: string;
+    walkthrough?: ReviewStep[];
 }
 export interface ContextItem {
     file: string;
     chunk: string;
+    chunkName?: string;
+    chunkType?: string;
     relevanceScore?: number;
 }
 export interface ToolsReviewResponse {
     status: "success" | "error";
-    message: string;
-    analysis: {
-        summary: string;
-        relatedContext: ContextItem[];
-        previousSteps: ReviewStep[];
-    };
+    answer: string;
+    relatedContext: ContextItem[];
+    confidence?: "high" | "medium" | "low";
+    sources?: string[];
+}
+export interface CodeQuestionInput {
+    repoId: string;
+    file?: string;
+    line?: string;
+    code?: string;
+    question: string;
+    walkthrough?: ReviewStep[];
+}
+export interface CodeQuestionResult {
+    answer: string;
+    relatedContext: ContextItem[];
+    confidence: "high" | "medium" | "low";
+    sources: string[];
 }
 export interface ErrorResponse {
     error: string;
