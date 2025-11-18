@@ -232,16 +232,9 @@ export async function listAllRepos(): Promise<RepoMetadata[]> {
   let offset: string | number | undefined = undefined;
 
   try {
+    // First try to scroll all points and filter in memory
     while (true) {
       const result = await client.scroll(COLLECTION_NAME, {
-        filter: {
-          must: [
-            {
-              key: "type",
-              match: { value: "metadata" },
-            },
-          ],
-        },
         limit: 100,
         offset,
         with_vector: false,
@@ -249,7 +242,11 @@ export async function listAllRepos(): Promise<RepoMetadata[]> {
 
       const points = result.points || [];
       for (const point of points) {
-        repos.push(point.payload as unknown as RepoMetadata);
+        // Only include metadata points
+        const payload = point.payload as unknown as any;
+        if (payload.type === "metadata") {
+          repos.push(payload as RepoMetadata);
+        }
       }
 
       if (!result.next_page_offset) {
@@ -257,8 +254,12 @@ export async function listAllRepos(): Promise<RepoMetadata[]> {
       }
       offset = result.next_page_offset as string | number | undefined;
     }
+
+    console.log(`✅ Found ${repos.length} indexed repositories`);
   } catch (err) {
     console.error(`Error listing repos: ${err}`);
+    // Return empty array on error to prevent crashing
+    return [];
   }
 
   return repos;

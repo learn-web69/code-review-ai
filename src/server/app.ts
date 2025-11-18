@@ -1,6 +1,12 @@
 // server/app.ts
 import express, { Request, Response, NextFunction } from "express";
 import { indexRepositoryFromUrl } from "../services/repo/indexService.js";
+import {
+  isRepoIndexed,
+  getRepoMetadata,
+  listAllRepos,
+} from "../services/qdrant/indexRepo.js";
+import { parseGitHubUrl } from "../services/repo/fetchRepo.js";
 
 const app = express();
 
@@ -14,14 +20,85 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Routes
-app.get("/status", (req: Request, res: Response) => {
-  console.log("[API] GET /status - Checking repo index status");
-  // TODO: Implement actual status check
-  res.json({
-    status: "ok",
-    indexed: false,
-    message: "Status check endpoint - implementation pending",
-  });
+app.get("/status", async (req: Request, res: Response) => {
+  const { repo_url, repo_id } = req.query;
+
+  if (!repo_url && !repo_id) {
+    console.log("[API] GET /status - Missing repo_url or repo_id parameter");
+    return res.status(400).json({
+      error: "repo_url or repo_id is required as query parameter",
+      example: "GET /status?repo_url=https://github.com/user/repo",
+    });
+  }
+
+  try {
+    let repoId = repo_id as string;
+
+    // If repo_url provided, derive repoId from it
+    if (repo_url && !repoId) {
+      console.log(
+        `[API] GET /status - Extracting repoId from URL: ${repo_url}`
+      );
+      const { owner, repo } = parseGitHubUrl(repo_url as string);
+      repoId = `${owner}_${repo}`;
+    }
+
+    console.log(
+      `[API] GET /status - Checking index status for repo: ${repoId}`
+    );
+
+    const indexed = await isRepoIndexed(repoId);
+
+    if (indexed) {
+      const metadata = await getRepoMetadata(repoId);
+      return res.json({
+        status: "indexed",
+        repo_id: repoId,
+        repo_url: repo_url || undefined,
+        indexed: true,
+        metadata: {
+          repoName: metadata?.repoName,
+          lastCommit: metadata?.lastCommit,
+          chunkCount: metadata?.chunkCount,
+          filesIndexed: metadata?.filesIndexed,
+          indexedAt: metadata?.indexedAt,
+        },
+      });
+    } else {
+      return res.json({
+        status: "not_indexed",
+        repo_id: repoId,
+        repo_url: repo_url || undefined,
+        indexed: false,
+        message: "Repository is not yet indexed",
+      });
+    }
+  } catch (err) {
+    console.error(`[API] GET /status - Error:`, err);
+    return res.status(500).json({
+      error: "Failed to check repository status",
+      details: (err as Error).message,
+    });
+  }
+});
+
+app.get("/repos", async (req: Request, res: Response) => {
+  try {
+    console.log("[API] GET /repos - Listing all indexed repositories");
+    const repos = await listAllRepos();
+
+    return res.json({
+      status: "success",
+      count: repos.length,
+      repositories: repos,
+    });
+  } catch (err) {
+    console.error(`[API] GET /repos - Error:`, err);
+    return res.status(500).json({
+      error: "Failed to list repositories",
+      details: (err as Error).message,
+    });
+  }
 });
 
 app.post("/init-repository", async (req: Request, res: Response) => {
