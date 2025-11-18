@@ -9,16 +9,6 @@ import {
 import { parseGitHubUrl } from "../services/repo/fetchRepo.js";
 import { reviewPRWalkthrough } from "../services/ai/high-level-review.js";
 
-// Track indexing progress
-interface IndexingProgress {
-  status: "processing" | "completed" | "failed";
-  progress: number;
-  error?: string;
-  startedAt: number;
-}
-
-const indexingProgress = new Map<string, IndexingProgress>();
-
 const app = express();
 
 // Middleware
@@ -147,92 +137,40 @@ app.post("/init-repository", async (req: Request, res: Response) => {
     `[API] POST /init-repository - Initializing repository: ${repo_url}`
   );
 
-  // Return 202 Accepted immediately
-  res.status(202).json({
-    status: "processing",
-    repo_url,
-    repo_id: repoId,
-    message: "Repository initialization started",
-    poll_endpoint: `/init-repository/status?repo_id=${repoId}`,
-  });
-
-  // Track indexing progress
-  indexingProgress.set(repoId, {
-    status: "processing",
-    progress: 0,
-    startedAt: Date.now(),
-  });
-
-  // Start indexing in background (don't await)
-  indexRepositoryFromUrl(repo_url)
-    .then((result) => {
-      console.log(`[API] Indexing completed for ${repo_url}:`, result);
-      indexingProgress.set(repoId, {
-        status: "completed",
-        progress: 100,
-        startedAt: Date.now(),
+  try {
+    // Check if already indexed
+    const alreadyIndexed = await isRepoIndexed(repoId);
+    if (alreadyIndexed) {
+      console.log(`[API] Repository ${repoId} already indexed, skipping`);
+      return res.json({
+        status: "success",
+        repo_url,
+        repo_id: repoId,
+        message: "Repository already indexed",
+        already_indexed: true,
       });
-      // Clean up after 5 minutes
-      setTimeout(() => indexingProgress.delete(repoId), 5 * 60 * 1000);
-    })
-    .catch((err) => {
-      console.error(`[API] Indexing failed for ${repo_url}:`, err);
-      indexingProgress.set(repoId, {
-        status: "failed",
-        progress: 0,
-        error: (err as Error).message,
-        startedAt: Date.now(),
-      });
-      // Clean up after 5 minutes
-      setTimeout(() => indexingProgress.delete(repoId), 5 * 60 * 1000);
+    }
+
+    // Index synchronously - user waits for completion
+    console.log(`[API] Starting indexing for ${repo_url}...`);
+    const result = await indexRepositoryFromUrl(repo_url);
+
+    console.log(`[API] Indexing completed for ${repo_url}:`, result);
+
+    return res.json({
+      status: "success",
+      repo_url,
+      repo_id: repoId,
+      message: "Repository indexed successfully",
+      result,
     });
-});
-
-app.get("/init-repository/status", (req: Request, res: Response) => {
-  const { repo_id } = req.query;
-
-  if (!repo_id) {
-    return res.status(400).json({
-      error: "repo_id is required as query parameter",
+  } catch (err) {
+    console.error(`[API] Indexing failed for ${repo_url}:`, err);
+    return res.status(500).json({
+      error: "Failed to index repository",
+      details: (err as Error).message,
     });
   }
-
-  const progress = indexingProgress.get(repo_id as string);
-
-  if (!progress) {
-    return res.status(404).json({
-      error: "No indexing operation found for this repo_id",
-      repo_id,
-    });
-  }
-
-  const elapsedSeconds = Math.floor((Date.now() - progress.startedAt) / 1000);
-  const timeout = 30 * 60; // 30 minutes timeout
-
-  // Check if timeout
-  if (progress.status === "processing" && elapsedSeconds > timeout) {
-    indexingProgress.set(repo_id as string, {
-      status: "failed",
-      progress: 0,
-      error: `Indexing timeout after ${timeout} seconds`,
-      startedAt: progress.startedAt,
-    });
-    return res.status(504).json({
-      status: "failed",
-      repo_id,
-      progress: 0,
-      error: `Indexing timeout after ${timeout} seconds`,
-      elapsed_seconds: elapsedSeconds,
-    });
-  }
-
-  return res.json({
-    status: progress.status,
-    repo_id,
-    progress: progress.progress,
-    error: progress.error || undefined,
-    elapsed_seconds: elapsedSeconds,
-  });
 });
 
 app.post("/review-pr", async (req: Request, res: Response) => {
