@@ -1,7 +1,7 @@
 // server/app.ts
 import express from "express";
 import { indexRepositoryFromUrl } from "../services/repo/indexService.js";
-import { isRepoIndexed, getRepoMetadata, listAllRepos, } from "../services/qdrant/indexRepo.js";
+import { isRepoIndexed, getRepoMetadata, listAllRepos, deleteRepo, } from "../services/qdrant/indexRepo.js";
 import { parseGitHubUrl } from "../services/repo/fetchRepo.js";
 import { reviewPRWalkthrough } from "../services/ai/high-level-review.js";
 const app = express();
@@ -91,6 +91,39 @@ app.get("/repos", async (req, res) => {
         console.error(`[API] GET /repos - Error:`, err);
         return res.status(500).json({
             error: "Failed to list repositories",
+            details: err.message,
+        });
+    }
+});
+app.delete("/repository", async (req, res) => {
+    const { repo_url, repo_id } = req.query;
+    if (!repo_url && !repo_id) {
+        console.log("[API] DELETE /repository - Missing repo_url or repo_id parameter");
+        return res.status(400).json({
+            error: "repo_url or repo_id is required as query parameter",
+            example: "DELETE /repository?repo_url=https://github.com/user/repo",
+        });
+    }
+    try {
+        let repoId = repo_id;
+        // If repo_url provided, derive repoId from it
+        if (repo_url && !repoId) {
+            console.log(`[API] DELETE /repository - Extracting repoId from URL: ${repo_url}`);
+            const { owner, repo } = parseGitHubUrl(repo_url);
+            repoId = `${owner}_${repo}`;
+        }
+        console.log(`[API] DELETE /repository - Deleting repository: ${repoId}`);
+        await deleteRepo(repoId);
+        return res.json({
+            status: "success",
+            repo_id: repoId,
+            message: "Repository deleted successfully",
+        });
+    }
+    catch (err) {
+        console.error(`[API] DELETE /repository - Error:`, err);
+        return res.status(500).json({
+            error: "Failed to delete repository",
             details: err.message,
         });
     }
