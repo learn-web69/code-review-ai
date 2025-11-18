@@ -8,6 +8,16 @@ import {
 } from "../services/qdrant/indexRepo.js";
 import { parseGitHubUrl } from "../services/repo/fetchRepo.js";
 
+// Track indexing progress
+interface IndexingProgress {
+  status: "processing" | "completed" | "failed";
+  progress: number;
+  error?: string;
+  startedAt: number;
+}
+
+const indexingProgress = new Map<string, IndexingProgress>();
+
 const app = express();
 
 // Middleware
@@ -112,6 +122,9 @@ app.post("/init-repository", async (req: Request, res: Response) => {
     });
   }
 
+  const { owner, repo } = parseGitHubUrl(repo_url as string);
+  const repoId = `${owner}_${repo}`;
+
   console.log(
     `[API] POST /init-repository - Initializing repository: ${repo_url}`
   );
@@ -120,17 +133,88 @@ app.post("/init-repository", async (req: Request, res: Response) => {
   res.status(202).json({
     status: "processing",
     repo_url,
+    repo_id: repoId,
     message: "Repository initialization started",
+    poll_endpoint: `/init-repository/status?repo_id=${repoId}`,
+  });
+
+  // Track indexing progress
+  indexingProgress.set(repoId, {
+    status: "processing",
+    progress: 0,
+    startedAt: Date.now(),
   });
 
   // Start indexing in background (don't await)
   indexRepositoryFromUrl(repo_url)
     .then((result) => {
       console.log(`[API] Indexing completed for ${repo_url}:`, result);
+      indexingProgress.set(repoId, {
+        status: "completed",
+        progress: 100,
+        startedAt: Date.now(),
+      });
+      // Clean up after 5 minutes
+      setTimeout(() => indexingProgress.delete(repoId), 5 * 60 * 1000);
     })
     .catch((err) => {
       console.error(`[API] Indexing failed for ${repo_url}:`, err);
+      indexingProgress.set(repoId, {
+        status: "failed",
+        progress: 0,
+        error: (err as Error).message,
+        startedAt: Date.now(),
+      });
+      // Clean up after 5 minutes
+      setTimeout(() => indexingProgress.delete(repoId), 5 * 60 * 1000);
     });
+});
+
+app.get("/init-repository/status", (req: Request, res: Response) => {
+  const { repo_id } = req.query;
+
+  if (!repo_id) {
+    return res.status(400).json({
+      error: "repo_id is required as query parameter",
+    });
+  }
+
+  const progress = indexingProgress.get(repo_id as string);
+
+  if (!progress) {
+    return res.status(404).json({
+      error: "No indexing operation found for this repo_id",
+      repo_id,
+    });
+  }
+
+  const elapsedSeconds = Math.floor((Date.now() - progress.startedAt) / 1000);
+  const timeout = 30 * 60; // 30 minutes timeout
+
+  // Check if timeout
+  if (progress.status === "processing" && elapsedSeconds > timeout) {
+    indexingProgress.set(repo_id as string, {
+      status: "failed",
+      progress: 0,
+      error: `Indexing timeout after ${timeout} seconds`,
+      startedAt: progress.startedAt,
+    });
+    return res.status(504).json({
+      status: "failed",
+      repo_id,
+      progress: 0,
+      error: `Indexing timeout after ${timeout} seconds`,
+      elapsed_seconds: elapsedSeconds,
+    });
+  }
+
+  return res.json({
+    status: progress.status,
+    repo_id,
+    progress: progress.progress,
+    error: progress.error || undefined,
+    elapsed_seconds: elapsedSeconds,
+  });
 });
 
 app.post("/review-pr/:pr_number", (req: Request, res: Response) => {
