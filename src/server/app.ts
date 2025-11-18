@@ -124,7 +124,9 @@ app.delete("/repository", async (req: Request, res: Response) => {
   const { repo_url, repo_id } = req.query;
 
   if (!repo_url && !repo_id) {
-    console.log("[API] DELETE /repository - Missing repo_url or repo_id parameter");
+    console.log(
+      "[API] DELETE /repository - Missing repo_url or repo_id parameter"
+    );
     return res.status(400).json({
       error: "repo_url or repo_id is required as query parameter",
       example: "DELETE /repository?repo_url=https://github.com/user/repo",
@@ -143,9 +145,7 @@ app.delete("/repository", async (req: Request, res: Response) => {
       repoId = `${owner}_${repo}`;
     }
 
-    console.log(
-      `[API] DELETE /repository - Deleting repository: ${repoId}`
-    );
+    console.log(`[API] DELETE /repository - Deleting repository: ${repoId}`);
 
     await deleteRepo(repoId);
 

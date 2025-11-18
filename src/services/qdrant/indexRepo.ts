@@ -237,7 +237,7 @@ export async function deleteRepo(repoId: string): Promise<void> {
     // Scroll through all points with this repoId and collect their IDs
     const pointIds: string[] = [];
     let offset: string | null = null;
-    
+
     while (true) {
       const scrollResult = await client.scroll(COLLECTION_NAME, {
         filter: {
