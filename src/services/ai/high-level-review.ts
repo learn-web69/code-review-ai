@@ -431,7 +431,7 @@ Return ONLY a valid JSON array (no markdown, no code blocks):
       console.log(`🔄 Attempt ${attempt}/${maxRetries} to call Gemini API...`);
 
       const result = await genAI.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       } as unknown as Parameters<typeof genAI.models.generateContent>[0]);
 

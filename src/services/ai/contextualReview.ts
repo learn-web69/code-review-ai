@@ -226,7 +226,7 @@ export async function answerCodeQuestion(
     // Call Gemini API
     console.log(`[ContextualReview] Sending prompt to Gemini...`);
     const result = await genAI.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     } as unknown as Parameters<typeof genAI.models.generateContent>[0]);
 
