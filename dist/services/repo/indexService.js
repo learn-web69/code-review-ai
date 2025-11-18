@@ -20,11 +20,11 @@ import { indexRepo } from "../qdrant/indexRepo.js";
 export async function indexRepositoryFromUrl(repoUrl) {
     try {
         console.log(`📦 Fetching repository from GitHub API: ${repoUrl}...`);
-        const { files } = await fetchRepo(repoUrl);
+        const { repoId, repoName, lastCommit, files } = await fetchRepo(repoUrl);
         console.log(`📁 Loaded ${files.length} files from GitHub:`);
         files.forEach((f) => console.log(`   - ${f.filePath}`));
         console.log("\n📡 Indexing repository into Qdrant...");
-        const vectorsCount = await indexRepo(files);
+        const vectorsCount = await indexRepo(repoId, repoName, lastCommit, files);
         const message = `Successfully indexed ${vectorsCount} vectors from ${files.length} files`;
         console.log(`\n✅ ${message}`);
         return {

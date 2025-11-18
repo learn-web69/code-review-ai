@@ -7,6 +7,7 @@ import {
   listAllRepos,
 } from "../services/qdrant/indexRepo.js";
 import { parseGitHubUrl } from "../services/repo/fetchRepo.js";
+import { reviewPRWalkthrough } from "../services/ai/high-level-review.js";
 
 // Track indexing progress
 interface IndexingProgress {
@@ -217,28 +218,42 @@ app.get("/init-repository/status", (req: Request, res: Response) => {
   });
 });
 
-app.post("/review-pr/:pr_number", (req: Request, res: Response) => {
-  const { pr_number } = req.params;
-  const { repo_url, owner, repo } = req.body || {};
+app.post("/review-pr", async (req: Request, res: Response) => {
+  const { pr_url } = req.body || {};
 
-  console.log(`[API] POST /review-pr/${pr_number} - Starting PR review`);
-  console.log(`  - Repo URL: ${repo_url || "not provided"}`);
-  console.log(`  - Owner: ${owner || "not provided"}`);
-  console.log(`  - Repo: ${repo || "not provided"}`);
+  if (!pr_url) {
+    console.log("[API] POST /review-pr - Missing pr_url in body");
+    return res.status(400).json({
+      error: "pr_url is required in request body",
+      example: {
+        pr_url: "https://github.com/owner/repo/pull/123",
+      },
+    });
+  }
 
-  res.status(202).json({
-    status: "processing",
-    pr_number: parseInt(pr_number),
-    message: "PR review started - full implementation pending",
-    steps: [
-      "Fetching PR changed files",
-      "Extracting semantic-diff chunks",
-      "Generating embeddings",
-      "Querying Qdrant for context",
-      "Generating AI review",
-      "Formatting results",
-    ],
-  });
+  console.log(`[API] POST /review-pr - Starting PR review for: ${pr_url}`);
+
+  try {
+    // Wait for review to complete
+    const review = await reviewPRWalkthrough(pr_url);
+
+    console.log(
+      `[API] PR review completed for ${pr_url}: ${review.length} steps identified`
+    );
+
+    return res.json({
+      status: "success",
+      pr_url,
+      steps_count: review.length,
+      steps: review,
+    });
+  } catch (err) {
+    console.error(`[API] POST /review-pr - Error:`, err);
+    return res.status(500).json({
+      error: "Failed to review PR",
+      details: (err as Error).message,
+    });
+  }
 });
 
 app.post("/tools/review", (req: Request, res: Response) => {

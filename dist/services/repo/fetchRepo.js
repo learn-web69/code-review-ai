@@ -12,7 +12,6 @@
  * No disk I/O - works on Vercel and other serverless platforms
  */
 import { Octokit } from "@octokit/rest";
-import { DEFAULT_REPO_URL } from "../../config/constants.js";
 // GitHub API client
 const octokit = new Octokit({
     auth: process.env.GITHUB_TOKEN,
@@ -91,8 +90,9 @@ async function fetchFilesRecursive(owner, repo, treeSha, basePath = "") {
 /**
  * Fetch all repo files from GitHub API (memory-based, no disk storage)
  * Perfect for Vercel and serverless environments
+ * Returns repo metadata needed for indexing
  */
-export async function fetchRepo(repoUrl = DEFAULT_REPO_URL) {
+export async function fetchRepo(repoUrl) {
     try {
         // Parse repository info from URL
         let repoInfo;
@@ -104,24 +104,35 @@ export async function fetchRepo(repoUrl = DEFAULT_REPO_URL) {
             repoInfo = { owner: "default", repo: "default" };
         }
         console.log(`📡 Fetching repository from GitHub API: ${repoInfo.owner}/${repoInfo.repo}...`);
-        // Get default branch
-        const repoInfo_response = await octokit.repos.get({
+        // Get repository metadata
+        const repoInfoResponse = await octokit.repos.get({
             owner: repoInfo.owner,
             repo: repoInfo.repo,
         });
-        const defaultBranch = repoInfo_response.data.default_branch;
+        const defaultBranch = repoInfoResponse.data.default_branch;
+        const repoName = repoInfoResponse.data.full_name || `${repoInfo.owner}/${repoInfo.repo}`;
         console.log(`📌 Using branch: ${defaultBranch}`);
-        // Get the tree SHA for the default branch
+        console.log(`📦 Repository name: ${repoName}`);
+        // Get the tree SHA and commit for the default branch
         const refResponse = await octokit.git.getRef({
             owner: repoInfo.owner,
             repo: repoInfo.repo,
             ref: `heads/${defaultBranch}`,
         });
         const treeSha = refResponse.data.object.sha;
+        const lastCommit = treeSha; // The SHA of the latest commit on the branch
+        // Generate deterministic repoId from owner/repo
+        const repoId = `${repoInfo.owner}_${repoInfo.repo}`;
         // Fetch all files recursively
         const files = await fetchFilesRecursive(repoInfo.owner, repoInfo.repo, treeSha);
         console.log(`✅ Fetched ${files.length} files from GitHub API`);
-        return { files };
+        console.log(`📋 Repo ID: ${repoId}, Last Commit: ${lastCommit}`);
+        return {
+            repoId,
+            repoName,
+            lastCommit,
+            files,
+        };
     }
     catch (err) {
         console.error("❌ Repository fetch failed:", err);

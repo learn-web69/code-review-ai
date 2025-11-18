@@ -1,6 +1,10 @@
 // server/app.ts
 import express from "express";
 import { indexRepositoryFromUrl } from "../services/repo/indexService.js";
+import { isRepoIndexed, getRepoMetadata, listAllRepos, } from "../services/qdrant/indexRepo.js";
+import { parseGitHubUrl } from "../services/repo/fetchRepo.js";
+import { reviewPRWalkthrough } from "../services/ai/high-level-review.js";
+const indexingProgress = new Map();
 const app = express();
 // Middleware
 app.use(express.json());
@@ -10,14 +14,76 @@ app.use((req, res, next) => {
     next();
 });
 // Routes
-app.get("/status", (req, res) => {
-    console.log("[API] GET /status - Checking repo index status");
-    // TODO: Implement actual status check
-    res.json({
-        status: "ok",
-        indexed: false,
-        message: "Status check endpoint - implementation pending",
-    });
+app.get("/status", async (req, res) => {
+    const { repo_url, repo_id } = req.query;
+    if (!repo_url && !repo_id) {
+        console.log("[API] GET /status - Missing repo_url or repo_id parameter");
+        return res.status(400).json({
+            error: "repo_url or repo_id is required as query parameter",
+            example: "GET /status?repo_url=https://github.com/user/repo",
+        });
+    }
+    try {
+        let repoId = repo_id;
+        // If repo_url provided, derive repoId from it
+        if (repo_url && !repoId) {
+            console.log(`[API] GET /status - Extracting repoId from URL: ${repo_url}`);
+            const { owner, repo } = parseGitHubUrl(repo_url);
+            repoId = `${owner}_${repo}`;
+        }
+        console.log(`[API] GET /status - Checking index status for repo: ${repoId}`);
+        const indexed = await isRepoIndexed(repoId);
+        if (indexed) {
+            const metadata = await getRepoMetadata(repoId);
+            return res.json({
+                status: "indexed",
+                repo_id: repoId,
+                repo_url: repo_url || undefined,
+                indexed: true,
+                metadata: {
+                    repoName: metadata?.repoName,
+                    lastCommit: metadata?.lastCommit,
+                    chunkCount: metadata?.chunkCount,
+                    filesIndexed: metadata?.filesIndexed,
+                    indexedAt: metadata?.indexedAt,
+                },
+            });
+        }
+        else {
+            return res.json({
+                status: "not_indexed",
+                repo_id: repoId,
+                repo_url: repo_url || undefined,
+                indexed: false,
+                message: "Repository is not yet indexed",
+            });
+        }
+    }
+    catch (err) {
+        console.error(`[API] GET /status - Error:`, err);
+        return res.status(500).json({
+            error: "Failed to check repository status",
+            details: err.message,
+        });
+    }
+});
+app.get("/repos", async (req, res) => {
+    try {
+        console.log("[API] GET /repos - Listing all indexed repositories");
+        const repos = await listAllRepos();
+        return res.json({
+            status: "success",
+            count: repos.length,
+            repositories: repos,
+        });
+    }
+    catch (err) {
+        console.error(`[API] GET /repos - Error:`, err);
+        return res.status(500).json({
+            error: "Failed to list repositories",
+            details: err.message,
+        });
+    }
 });
 app.post("/init-repository", async (req, res) => {
     const { repo_url } = req.body || {};
@@ -28,42 +94,117 @@ app.post("/init-repository", async (req, res) => {
             example: { repo_url: "https://github.com/user/repo" },
         });
     }
+    const { owner, repo } = parseGitHubUrl(repo_url);
+    const repoId = `${owner}_${repo}`;
     console.log(`[API] POST /init-repository - Initializing repository: ${repo_url}`);
     // Return 202 Accepted immediately
     res.status(202).json({
         status: "processing",
         repo_url,
+        repo_id: repoId,
         message: "Repository initialization started",
+        poll_endpoint: `/init-repository/status?repo_id=${repoId}`,
+    });
+    // Track indexing progress
+    indexingProgress.set(repoId, {
+        status: "processing",
+        progress: 0,
+        startedAt: Date.now(),
     });
     // Start indexing in background (don't await)
     indexRepositoryFromUrl(repo_url)
         .then((result) => {
         console.log(`[API] Indexing completed for ${repo_url}:`, result);
+        indexingProgress.set(repoId, {
+            status: "completed",
+            progress: 100,
+            startedAt: Date.now(),
+        });
+        // Clean up after 5 minutes
+        setTimeout(() => indexingProgress.delete(repoId), 5 * 60 * 1000);
     })
         .catch((err) => {
         console.error(`[API] Indexing failed for ${repo_url}:`, err);
+        indexingProgress.set(repoId, {
+            status: "failed",
+            progress: 0,
+            error: err.message,
+            startedAt: Date.now(),
+        });
+        // Clean up after 5 minutes
+        setTimeout(() => indexingProgress.delete(repoId), 5 * 60 * 1000);
     });
 });
-app.post("/review-pr/:pr_number", (req, res) => {
-    const { pr_number } = req.params;
-    const { repo_url, owner, repo } = req.body || {};
-    console.log(`[API] POST /review-pr/${pr_number} - Starting PR review`);
-    console.log(`  - Repo URL: ${repo_url || "not provided"}`);
-    console.log(`  - Owner: ${owner || "not provided"}`);
-    console.log(`  - Repo: ${repo || "not provided"}`);
-    res.status(202).json({
-        status: "processing",
-        pr_number: parseInt(pr_number),
-        message: "PR review started - full implementation pending",
-        steps: [
-            "Fetching PR changed files",
-            "Extracting semantic-diff chunks",
-            "Generating embeddings",
-            "Querying Qdrant for context",
-            "Generating AI review",
-            "Formatting results",
-        ],
+app.get("/init-repository/status", (req, res) => {
+    const { repo_id } = req.query;
+    if (!repo_id) {
+        return res.status(400).json({
+            error: "repo_id is required as query parameter",
+        });
+    }
+    const progress = indexingProgress.get(repo_id);
+    if (!progress) {
+        return res.status(404).json({
+            error: "No indexing operation found for this repo_id",
+            repo_id,
+        });
+    }
+    const elapsedSeconds = Math.floor((Date.now() - progress.startedAt) / 1000);
+    const timeout = 30 * 60; // 30 minutes timeout
+    // Check if timeout
+    if (progress.status === "processing" && elapsedSeconds > timeout) {
+        indexingProgress.set(repo_id, {
+            status: "failed",
+            progress: 0,
+            error: `Indexing timeout after ${timeout} seconds`,
+            startedAt: progress.startedAt,
+        });
+        return res.status(504).json({
+            status: "failed",
+            repo_id,
+            progress: 0,
+            error: `Indexing timeout after ${timeout} seconds`,
+            elapsed_seconds: elapsedSeconds,
+        });
+    }
+    return res.json({
+        status: progress.status,
+        repo_id,
+        progress: progress.progress,
+        error: progress.error || undefined,
+        elapsed_seconds: elapsedSeconds,
     });
+});
+app.post("/review-pr", async (req, res) => {
+    const { pr_url } = req.body || {};
+    if (!pr_url) {
+        console.log("[API] POST /review-pr - Missing pr_url in body");
+        return res.status(400).json({
+            error: "pr_url is required in request body",
+            example: {
+                pr_url: "https://github.com/owner/repo/pull/123",
+            },
+        });
+    }
+    console.log(`[API] POST /review-pr - Starting PR review for: ${pr_url}`);
+    try {
+        // Wait for review to complete
+        const review = await reviewPRWalkthrough(pr_url);
+        console.log(`[API] PR review completed for ${pr_url}: ${review.length} steps identified`);
+        return res.json({
+            status: "success",
+            pr_url,
+            steps_count: review.length,
+            steps: review,
+        });
+    }
+    catch (err) {
+        console.error(`[API] POST /review-pr - Error:`, err);
+        return res.status(500).json({
+            error: "Failed to review PR",
+            details: err.message,
+        });
+    }
 });
 app.post("/tools/review", (req, res) => {
     const { repo_url, code, question, context } = req.body || {};

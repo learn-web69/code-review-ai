@@ -56,6 +56,9 @@ export interface CodeBlock {
 export interface PRFile {
   filename: string;
   patch: string;
+  status?: string; // "added", "modified", "removed", etc.
+  blob_url?: string;
+  contents_url?: string;
 }
 
 export interface AIReviewSummary {

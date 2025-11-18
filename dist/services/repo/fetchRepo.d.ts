@@ -10,8 +10,12 @@ export declare function parseGitHubUrl(repoUrl: string): {
 /**
  * Fetch all repo files from GitHub API (memory-based, no disk storage)
  * Perfect for Vercel and serverless environments
+ * Returns repo metadata needed for indexing
  */
-export declare function fetchRepo(repoUrl?: string): Promise<{
+export declare function fetchRepo(repoUrl: string): Promise<{
+    repoId: string;
+    repoName: string;
+    lastCommit: string;
     files: FileContent[];
 }>;
 //# sourceMappingURL=fetchRepo.d.ts.map
