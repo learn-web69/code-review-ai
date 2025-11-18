@@ -61,12 +61,10 @@ function generateFileUrl(owner, repo, prNumber, filename, startLine, endLine) {
     const baseUrl = `https://github.com/${owner}/${repo}/pull/${prNumber}/files`;
     if (startLine > 0) {
         // Calculate GitHub's diff hash (SHA256 of filename)
-        const diffHash = crypto.createHash('sha256').update(filename).digest('hex');
+        const diffHash = crypto.createHash("sha256").update(filename).digest("hex");
         // Use GitHub's format: #diff-<hash>R<start>-R<end>
         // R prefix indicates right-side (new file) line numbers
-        const lineAnchor = endLine > startLine
-            ? `R${startLine}-R${endLine}`
-            : `R${startLine}`;
+        const lineAnchor = endLine > startLine ? `R${startLine}-R${endLine}` : `R${startLine}`;
         return `${baseUrl}#diff-${diffHash}${lineAnchor}`;
     }
     return baseUrl;
@@ -92,22 +90,34 @@ function enrichFilesWithMetadata(files, owner, repo, prNumber) {
         const changeUrl = generateFileUrl(owner, repo, prNumber, file.filename, startLine, endLine);
         // Extract block info focusing on ACTUAL changed lines only
         const blockInfo = blocks.map((block) => {
-            // Get line numbers from the actual changes (not context lines)
-            const changedLineNumbers = block.changes
-                .filter((change) => change.newNumber !== undefined)
-                .map((change) => change.newNumber);
-            // Extract code snippet (added/modified lines only)
-            const codeLines = block.changes
-                .filter((change) => change.type === 'insert' || change.type === 'unchanged')
-                .map((change) => change.text);
+            // Get line numbers from ONLY the inserted/modified lines (not deletions)
+            const insertedChanges = block.changes.filter((change) => change.type === "insert" && change.newNumber !== undefined);
+            const changedLineNumbers = insertedChanges.map((change) => change.newNumber);
+            // Build code snippet with line number annotations for inserted lines
+            // This helps AI identify exact lines for specific features
+            const annotatedLines = [];
+            for (const change of block.changes) {
+                if (change.type === "insert" && change.newNumber !== undefined) {
+                    // Annotate inserted lines with their actual line numbers
+                    annotatedLines.push(`L${change.newNumber}: ${change.text}`);
+                }
+                else if (change.type === "unchanged" &&
+                    change.newNumber !== undefined) {
+                    // Include context but don't annotate (so AI knows it's context)
+                    annotatedLines.push(`      ${change.text}`);
+                }
+                // Skip deletions - they don't have line numbers in the new file
+            }
             // Show ALL code - blocks are already chunked, no need to truncate further
             // Only truncate if a single block is ridiculously large (500+ lines)
             const maxLines = 500;
-            const truncated = codeLines.length > maxLines;
-            const displayLines = truncated ? codeLines.slice(0, maxLines) : codeLines;
-            let codeSnippet = displayLines.join('\n');
+            const truncated = annotatedLines.length > maxLines;
+            const displayLines = truncated
+                ? annotatedLines.slice(0, maxLines)
+                : annotatedLines;
+            let codeSnippet = displayLines.join("\n");
             if (truncated) {
-                const remainingLines = codeLines.length - maxLines;
+                const remainingLines = annotatedLines.length - maxLines;
                 codeSnippet += `\n... (${remainingLines} more lines - block too large)`;
             }
             if (changedLineNumbers.length === 0) {
@@ -121,6 +131,7 @@ function enrichFilesWithMetadata(files, owner, repo, prNumber) {
                     blockHeader: block.blockHeader,
                     codeSnippet,
                     url: blockUrl,
+                    actualChangedLines: [], // No changes (all deletions)
                 };
             }
             const blockStartLine = Math.min(...changedLineNumbers);
@@ -132,6 +143,7 @@ function enrichFilesWithMetadata(files, owner, repo, prNumber) {
                 blockHeader: block.blockHeader,
                 codeSnippet,
                 url: blockUrl,
+                actualChangedLines: changedLineNumbers, // Store for AI guidance
             };
         });
         return {
@@ -154,11 +166,15 @@ function formatFileSummariesForAI(files, owner, repo) {
             const lineRange = block.endLine > block.startLine
                 ? `${block.startLine}-${block.endLine}`
                 : `${block.startLine}`;
+            // Show which specific lines are actual changes (with L prefix)
+            const changedLinesNote = block.actualChangedLines.length > 0
+                ? `\n   ACTUAL CHANGED LINES: ${block.actualChangedLines.join(", ")}`
+                : "";
             // Show actual code snippet for each block
             const codePreview = block.codeSnippet
                 ? `\n   Code:\n\`\`\`\n${block.codeSnippet}\n\`\`\``
-                : '';
-            return `  Block ${blockIdx}: Lines ${lineRange}${codePreview}`;
+                : "";
+            return `  Block ${blockIdx}: Lines ${lineRange}${changedLinesNote}${codePreview}`;
         })
             .join("\n\n");
         return `
@@ -210,6 +226,15 @@ IMPORTANT GUIDELINES:
 3. For MODIFIED files with multiple distinct changes: Create separate steps for each block, specifying the blockIndex
 4. Don't create multiple steps that point to the exact same code block - combine related changes into one step
 
+CODE SNIPPET LINE NUMBER ANNOTATIONS:
+- Each block shows "ACTUAL CHANGED LINES: X, Y, Z" - these are the ONLY lines that were inserted/modified
+- Lines starting with "L<number>:" are ACTUAL INSERTED/MODIFIED lines with their true line numbers
+- Lines with just spaces (no "L" prefix) are CONTEXT lines - unchanged surrounding code
+- When specifying startLine/endLine, ONLY use line numbers from the "ACTUAL CHANGED LINES" list
+- Example: If "ACTUAL CHANGED LINES: 32, 33, 34" and you see "L32:" through "L34:", use startLine: 32, endLine: 34
+- NEVER include context-only lines (without "L" prefix) in your line ranges
+- For precise features, use the smallest possible range that covers just that feature
+
 ORDERING RULES (CRITICAL - FOLLOW STRICTLY):
 1. **Component/File Creation ALWAYS comes first** - If a new component is created, that step must be the FIRST step for that component
 2. **Implementation details come after creation** - Features within a component (like mobile handling, context usage) come AFTER the creation step
@@ -234,13 +259,14 @@ Instructions:
    - A detailed description explaining what changed and why it matters (2-3 sentences)
    - The filename where this change occurs (EXACT filename as shown above)
    - The blockIndex (0, 1, 2, etc.) - REQUIRED for files with multiple blocks
-   - IMPORTANT: If describing a specific feature within a block, also provide:
-     * startLine: The exact line number where this specific feature/change starts (EXCLUDE imports, focus on actual code changes)
-     * endLine: The exact line number where this specific feature/change ends
-     * Example: If a block spans lines 8-15 but lines 8-9 are just imports and the actual state change is lines 14-15, specify startLine: 14, endLine: 15
-     * Example: If mobile handling logic is on lines 18-28, specify startLine: 18, endLine: 28
+   - IMPORTANT: For specific features within a block, provide exact line ranges:
+     * startLine: First "L" annotated line of this feature (look for "L<number>:" prefix)
+     * endLine: Last "L" annotated line of this feature
+     * Example: If mobile handling spans "L32:" to "L34:", use startLine: 32, endLine: 34
+     * DO NOT include context lines (lines without "L" prefix) in your ranges
+     * For new file creation, omit startLine/endLine (whole file)
 3. Order changes logically: definitions before usage, dependencies before dependents
-4. For new component creation, you can omit startLine/endLine (whole file). For specific features, provide exact lines.
+4. Be precise - only include the actual changed code in your line ranges, not surrounding context
 
 Return ONLY a valid JSON array (no markdown, no code blocks):
 [
@@ -285,11 +311,13 @@ Return ONLY a valid JSON array (no markdown, no code blocks):
                         if (fileMetadata.blocks.length === 1) {
                             // Single block - check if AI provided specific line numbers
                             const block = fileMetadata.blocks[0];
-                            if (item.startLine !== undefined && item.endLine !== undefined) {
+                            if (item.startLine !== undefined &&
+                                item.endLine !== undefined) {
                                 // AI specified exact lines within the block - use them!
-                                lineRange = item.endLine > item.startLine
-                                    ? `${item.startLine}-${item.endLine}`
-                                    : `${item.startLine}`;
+                                lineRange =
+                                    item.endLine > item.startLine
+                                        ? `${item.startLine}-${item.endLine}`
+                                        : `${item.startLine}`;
                                 lineNumber = item.startLine;
                                 // Generate URL with AI's specific lines
                                 blockUrl = generateFileUrl(owner, repo, prNumber, item.file, item.startLine, item.endLine);
@@ -307,7 +335,8 @@ Return ONLY a valid JSON array (no markdown, no code blocks):
                         else if (fileMetadata.blocks.length > 1) {
                             // Multiple blocks - use AI's blockIndex if provided
                             let selectedBlock = fileMetadata.blocks[0]; // default to first
-                            if (item.blockIndex !== undefined && fileMetadata.blocks[item.blockIndex]) {
+                            if (item.blockIndex !== undefined &&
+                                fileMetadata.blocks[item.blockIndex]) {
                                 // AI specified which block - use it!
                                 selectedBlock = fileMetadata.blocks[item.blockIndex];
                             }
@@ -316,10 +345,12 @@ Return ONLY a valid JSON array (no markdown, no code blocks):
                                 console.warn(`⚠️ AI didn't specify valid blockIndex for "${item.title}" in ${item.file}, using first block`);
                             }
                             // Check if AI provided specific line numbers within the block
-                            if (item.startLine !== undefined && item.endLine !== undefined) {
-                                lineRange = item.endLine > item.startLine
-                                    ? `${item.startLine}-${item.endLine}`
-                                    : `${item.startLine}`;
+                            if (item.startLine !== undefined &&
+                                item.endLine !== undefined) {
+                                lineRange =
+                                    item.endLine > item.startLine
+                                        ? `${item.startLine}-${item.endLine}`
+                                        : `${item.startLine}`;
                                 lineNumber = item.startLine;
                                 blockUrl = generateFileUrl(owner, repo, prNumber, item.file, item.startLine, item.endLine);
                             }
