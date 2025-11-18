@@ -41,6 +41,29 @@ const client = new QdrantClient({
 });
 
 /**
+ * Ensure payload index exists for repoId field
+ */
+async function ensureRepoIdIndex(): Promise<void> {
+  try {
+    await client.createPayloadIndex(COLLECTION_NAME, {
+      field_name: "repoId",
+      field_schema: "keyword",
+    });
+    console.log(`🟢 Created payload index for "repoId" field`);
+  } catch (err) {
+    const errAsAny = err as Record<string, unknown>;
+    const msg = (errAsAny?.message as string) || String(err);
+    const isAlreadyExists =
+      msg.toLowerCase().includes("already exists") ||
+      (errAsAny?.status as number) === 409;
+
+    if (!isAlreadyExists) {
+      console.error(`⚠️ Failed to create repoId index:`, err);
+    }
+  }
+}
+
+/**
  * Create collection if it doesn't exist.
  */
 async function ensureCollection(): Promise<void> {
@@ -207,17 +230,51 @@ async function markRepoAsIndexed(
  */
 export async function deleteRepo(repoId: string): Promise<void> {
   try {
+    // Ensure collection and index exist
+    await ensureCollection();
+    await ensureRepoIdIndex();
+
+    // Scroll through all points with this repoId and collect their IDs
+    const pointIds: string[] = [];
+    let offset: string | null = null;
+    
+    while (true) {
+      const scrollResult = await client.scroll(COLLECTION_NAME, {
+        filter: {
+          must: [
+            {
+              key: "repoId",
+              match: { value: repoId },
+            },
+          ],
+        },
+        limit: 100,
+        offset: offset || undefined,
+        with_payload: false,
+        with_vector: false,
+      });
+
+      if (scrollResult.points && scrollResult.points.length > 0) {
+        pointIds.push(...scrollResult.points.map((p) => p.id as string));
+      }
+
+      if (!scrollResult.next_page_offset) {
+        break;
+      }
+      offset = scrollResult.next_page_offset as string;
+    }
+
+    if (pointIds.length === 0) {
+      console.log(`🗑️ No points found for repo: ${repoId}`);
+      return;
+    }
+
+    // Delete all collected points by ID
     await client.delete(COLLECTION_NAME, {
-      filter: {
-        must: [
-          {
-            key: "repoId",
-            match: { value: repoId },
-          },
-        ],
-      },
+      points: pointIds,
     });
-    console.log(`🗑️ Deleted all data for repo: ${repoId}`);
+
+    console.log(`🗑️ Deleted ${pointIds.length} points for repo: ${repoId}`);
   } catch (err) {
     console.error(`Error deleting repo: ${err}`);
     throw err;
