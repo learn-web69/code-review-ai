@@ -7,11 +7,11 @@ const router = Router();
 
 /**
  * POST /tools/review
- * 
+ *
  * Handle questions about specific code in a GitHub PR review context.
  * The AI can understand the text, line, and file being asked about.
  * Uses QDrant to find related context (e.g., function definitions).
- * 
+ *
  * Request body:
  * - repo_id: Repository identifier (owner_repo format)
  * - file?: File path in the PR
@@ -62,7 +62,9 @@ router.post("/", async (req: Request, res: Response) => {
     console.log(`  - Question: ${question}`);
     console.log(`  - Code provided: ${!!code}`);
     console.log(
-      `  - Walkthrough context: ${walkthrough ? walkthrough.length + " steps" : "not provided"}`
+      `  - Walkthrough context: ${
+        walkthrough ? walkthrough.length + " steps" : "not provided"
+      }`
     );
 
     // Call the service to answer the question

@@ -7,6 +7,7 @@ The `/tools/review` endpoint enables AI-powered question answering about code in
 ## Use Case
 
 When reviewing a PR in the GitHub UI, you can ask questions about:
+
 - What a specific function does
 - How a piece of code works
 - Why a change was made
@@ -14,6 +15,7 @@ When reviewing a PR in the GitHub UI, you can ask questions about:
 - What dependencies a piece of code has
 
 The AI will:
+
 1. Parse your question and code context
 2. Search QDrant for related code chunks (function definitions, classes, etc.)
 3. Use previously generated PR walkthrough steps if provided
@@ -66,6 +68,7 @@ POST /tools/review
 ### Example 1: Question about a code snippet
 
 **Request:**
+
 ```bash
 curl -X POST http://localhost:3000/tools/review \
   -H "Content-Type: application/json" \
@@ -79,6 +82,7 @@ curl -X POST http://localhost:3000/tools/review \
 ```
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -100,6 +104,7 @@ curl -X POST http://localhost:3000/tools/review \
 ### Example 2: Question without code (searches for context)
 
 **Request:**
+
 ```bash
 curl -X POST http://localhost:3000/tools/review \
   -H "Content-Type: application/json" \
@@ -110,6 +115,7 @@ curl -X POST http://localhost:3000/tools/review \
 ```
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -139,6 +145,7 @@ curl -X POST http://localhost:3000/tools/review \
 ### Example 3: Question with PR walkthrough context
 
 **Request:**
+
 ```bash
 curl -X POST http://localhost:3000/tools/review \
   -H "Content-Type: application/json" \
@@ -184,11 +191,13 @@ Contextual Review Service (services/ai/contextualReview.ts)
 ### Key Components
 
 1. **Route Handler** (`src/server/routes/toolsReview.ts`)
+
    - Validates incoming requests
    - Calls the contextual review service
    - Returns formatted response
 
 2. **Contextual Review Service** (`src/services/ai/contextualReview.ts`)
+
    - Builds search query from question and context
    - Searches QDrant for related code chunks
    - Generates comprehensive AI prompt
@@ -196,6 +205,7 @@ Contextual Review Service (services/ai/contextualReview.ts)
    - Determines confidence level
 
 3. **QDrant Integration**
+
    - Uses vector embeddings to find semantically similar code
    - Filters by repository ID
    - Returns top 5 most relevant code chunks
@@ -212,6 +222,7 @@ Contextual Review Service (services/ai/contextualReview.ts)
 To integrate with a browser extension or UI tool:
 
 1. **Capture Context**: When user selects code or clicks on a line
+
    ```javascript
    const context = {
      repo_id: "owner_repo",
@@ -222,10 +233,11 @@ To integrate with a browser extension or UI tool:
    ```
 
 2. **Send Question**: Make API call with question and context
+
    ```javascript
-   const response = await fetch('http://localhost:3000/tools/review', {
-     method: 'POST',
-     headers: { 'Content-Type': 'application/json' },
+   const response = await fetch("http://localhost:3000/tools/review", {
+     method: "POST",
+     headers: { "Content-Type": "application/json" },
      body: JSON.stringify({
        ...context,
        question: userQuestion,
@@ -259,6 +271,7 @@ The endpoint handles various error cases:
 - **500 Internal Server Error**: QDrant search failure, AI generation error
 
 Example error response:
+
 ```json
 {
   "error": "Failed to answer question",
@@ -275,6 +288,7 @@ Example error response:
 ## Future Enhancements
 
 Potential improvements:
+
 - Cache frequently asked questions
 - Support for multi-file context
 - Image/diagram generation for explanations

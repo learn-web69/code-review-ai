@@ -17,6 +17,7 @@ routes/
 Handles the `/tools/review` endpoint for contextual code question answering.
 
 **Functionality:**
+
 - Accepts questions about specific code in PR reviews
 - Uses QDrant vector search to find related code context
 - Generates AI-powered answers using Gemini
@@ -25,6 +26,7 @@ Handles the `/tools/review` endpoint for contextual code question answering.
 **Path:** `POST /tools/review`
 
 **Key Features:**
+
 - Request validation
 - Repository-scoped context search
 - Confidence scoring
@@ -38,15 +40,16 @@ To add a new route module:
 
 1. Create a new file in this directory (e.g., `newRoute.ts`)
 2. Export an Express Router:
+
    ```typescript
    import { Router } from "express";
-   
+
    const router = Router();
-   
+
    router.post("/", async (req, res) => {
      // Handle request
    });
-   
+
    export default router;
    ```
 

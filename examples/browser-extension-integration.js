@@ -1,6 +1,6 @@
 /**
  * Example: Browser Extension Integration for GitHub PR Review
- * 
+ *
  * This example shows how to integrate the /tools/review endpoint
  * into a browser extension that adds AI Q&A to GitHub PR reviews.
  */
@@ -20,9 +20,7 @@ class GitHubPRAssistant {
    * Extract repository ID from GitHub URL
    */
   extractRepoId() {
-    const match = window.location.href.match(
-      /github\.com\/([^\/]+)\/([^\/]+)/
-    );
+    const match = window.location.href.match(/github\.com\/([^\/]+)\/([^\/]+)/);
     if (match) {
       return `${match[1]}_${match[2]}`;
     }
@@ -84,7 +82,7 @@ class GitHubPRAssistant {
    * Extract line number from GitHub's diff view
    */
   extractLineNumber(element) {
-    const lineCell = element.querySelector('[data-line-number]');
+    const lineCell = element.querySelector("[data-line-number]");
     if (lineCell) {
       return lineCell.getAttribute("data-line-number");
     }
@@ -97,7 +95,7 @@ class GitHubPRAssistant {
   extractFileName(element) {
     const fileHeader = element.closest(".file");
     if (fileHeader) {
-      const fileInfo = fileHeader.querySelector('[data-path]');
+      const fileInfo = fileHeader.querySelector("[data-path]");
       if (fileInfo) {
         return fileInfo.getAttribute("data-path");
       }
@@ -197,10 +195,14 @@ class GitHubPRAssistant {
         }
         
         <div class="ai-metadata">
-          <span class="confidence ${result.confidence}">${result.confidence} confidence</span>
+          <span class="confidence ${result.confidence}">${
+      result.confidence
+    } confidence</span>
           ${
             result.sources.length > 0
-              ? `<span class="sources">Sources: ${result.sources.join(", ")}</span>`
+              ? `<span class="sources">Sources: ${result.sources.join(
+                  ", "
+                )}</span>`
               : ""
           }
         </div>
@@ -210,11 +212,9 @@ class GitHubPRAssistant {
     document.body.appendChild(modal);
 
     // Add close handler
-    modal
-      .querySelector(".ai-assistant-close")
-      .addEventListener("click", () => {
-        modal.remove();
-      });
+    modal.querySelector(".ai-assistant-close").addEventListener("click", () => {
+      modal.remove();
+    });
 
     // Close on outside click
     modal.addEventListener("click", (e) => {
@@ -240,7 +240,13 @@ class GitHubPRAssistant {
             <strong>${ctx.file}</strong>
             ${ctx.chunkName ? `- ${ctx.chunkName}` : ""}
             ${ctx.chunkType ? `(${ctx.chunkType})` : ""}
-            ${ctx.relevanceScore ? `<span class="relevance">${(ctx.relevanceScore * 100).toFixed(0)}%</span>` : ""}
+            ${
+              ctx.relevanceScore
+                ? `<span class="relevance">${(ctx.relevanceScore * 100).toFixed(
+                    0
+                  )}%</span>`
+                : ""
+            }
           </div>
           <pre><code>${this.escapeHtml(ctx.chunk)}</code></pre>
         </div>

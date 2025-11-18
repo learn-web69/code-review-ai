@@ -45,6 +45,7 @@ POST http://localhost:3000/tools/review
 ## Common Use Cases
 
 ### 1. Ask About Selected Code
+
 ```bash
 curl -X POST http://localhost:3000/tools/review \
   -H "Content-Type: application/json" \
@@ -58,6 +59,7 @@ curl -X POST http://localhost:3000/tools/review \
 ```
 
 ### 2. General Question (No Code)
+
 ```bash
 curl -X POST http://localhost:3000/tools/review \
   -H "Content-Type: application/json" \
@@ -68,6 +70,7 @@ curl -X POST http://localhost:3000/tools/review \
 ```
 
 ### 3. Question About Function
+
 ```bash
 curl -X POST http://localhost:3000/tools/review \
   -H "Content-Type: application/json" \
@@ -82,6 +85,7 @@ curl -X POST http://localhost:3000/tools/review \
 ## Prerequisites
 
 1. Repository must be indexed:
+
    ```bash
    curl -X POST http://localhost:3000/init-repository \
      -H "Content-Type: application/json" \
@@ -96,6 +100,7 @@ curl -X POST http://localhost:3000/tools/review \
 ## Response Examples
 
 ### High Confidence Answer
+
 ```json
 {
   "status": "success",
@@ -115,6 +120,7 @@ curl -X POST http://localhost:3000/tools/review \
 ```
 
 ### Error Response
+
 ```json
 {
   "error": "question is required in request body",
@@ -128,13 +134,14 @@ curl -X POST http://localhost:3000/tools/review \
 ## Integration Tips
 
 ### JavaScript/TypeScript
+
 ```typescript
-const response = await fetch('http://localhost:3000/tools/review', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+const response = await fetch("http://localhost:3000/tools/review", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    repo_id: 'owner_repo',
-    question: 'Your question here',
+    repo_id: "owner_repo",
+    question: "Your question here",
     code: selectedCode,
   }),
 });
@@ -144,6 +151,7 @@ console.log(result.answer);
 ```
 
 ### React Hook
+
 ```typescript
 function useCodeQuestion() {
   const [loading, setLoading] = useState(false);
@@ -152,9 +160,9 @@ function useCodeQuestion() {
   const ask = async (question, context) => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3000/tools/review', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("http://localhost:3000/tools/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...context, question }),
       });
       const result = await response.json();
@@ -171,12 +179,15 @@ function useCodeQuestion() {
 ## Troubleshooting
 
 ### "Repository not indexed"
+
 Run: `curl -X POST http://localhost:3000/init-repository -d '{"repo_url":"..."}'`
 
 ### "Cannot find module"
+
 Run: `npm run build` to rebuild TypeScript files
 
 ### Slow responses
+
 - Normal: 2-4 seconds
 - Check QDrant connection
 - Check Gemini API limits

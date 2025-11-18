@@ -1,6 +1,6 @@
 /**
  * TypeScript API Client for Code Review AI - Tools Review Endpoint
- * 
+ *
  * This client provides a type-safe interface for interacting with the
  * /tools/review endpoint. It can be used in browser extensions, web apps,
  * or Node.js applications.
@@ -84,9 +84,7 @@ export class CodeReviewClient {
   /**
    * Ask a question about code in a PR review
    */
-  async askQuestion(
-    request: ToolsReviewRequest
-  ): Promise<ToolsReviewResponse> {
+  async askQuestion(request: ToolsReviewRequest): Promise<ToolsReviewResponse> {
     this.config.onRequest(request);
 
     try {
@@ -140,10 +138,7 @@ export class CodeReviewClient {
   /**
    * Ask a simple question (minimal context)
    */
-  async ask(
-    repoId: string,
-    question: string
-  ): Promise<ToolsReviewResponse> {
+  async ask(repoId: string, question: string): Promise<ToolsReviewResponse> {
     return this.askQuestion({ repo_id: repoId, question });
   }
 

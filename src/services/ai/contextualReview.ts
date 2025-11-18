@@ -58,10 +58,7 @@ async function findRelatedContext(
       };
     });
   } catch (error) {
-    console.error(
-      `[ContextualReview] Error finding related context:`,
-      error
-    );
+    console.error(`[ContextualReview] Error finding related context:`, error);
     return [];
   }
 }
@@ -101,7 +98,9 @@ function buildWalkthroughContext(walkthrough?: ReviewStep[]): string {
     walkthrough
       .map(
         (step, idx) =>
-          `${idx + 1}. **${step.file}** - ${step.chunkName} (${step.chunkType})\n   ${step.explanation}`
+          `${idx + 1}. **${step.file}** - ${step.chunkName} (${
+            step.chunkType
+          })\n   ${step.explanation}`
       )
       .join("\n\n")
   );
@@ -120,7 +119,9 @@ function buildRelatedCodeContext(relatedContext: ContextItem[]): string {
     relatedContext
       .map(
         (ctx, idx) =>
-          `${idx + 1}. **${ctx.file}** - ${ctx.chunkName || "Code Block"} (${ctx.chunkType || "unknown"})\n` +
+          `${idx + 1}. **${ctx.file}** - ${ctx.chunkName || "Code Block"} (${
+            ctx.chunkType || "unknown"
+          })\n` +
           `   Relevance: ${((ctx.relevanceScore || 0) * 100).toFixed(1)}%\n` +
           "```\n" +
           ctx.chunk +
@@ -230,9 +231,7 @@ export async function answerCodeQuestion(
     } as unknown as Parameters<typeof genAI.models.generateContent>[0]);
 
     const answer = result?.text?.trim() || "Unable to generate answer.";
-    console.log(
-      `[ContextualReview] Received answer (${answer.length} chars)`
-    );
+    console.log(`[ContextualReview] Received answer (${answer.length} chars)`);
 
     // Determine confidence level
     const confidence = determineConfidence(relatedContext, !!input.code);

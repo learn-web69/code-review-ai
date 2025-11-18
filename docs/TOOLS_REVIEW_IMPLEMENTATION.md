@@ -7,22 +7,26 @@ A complete `/tools/review` endpoint that enables AI-powered question answering a
 ## Key Features
 
 ✅ **Contextual Understanding**
+
 - Understands questions about specific files and line numbers
 - Processes code snippets directly from the PR
 - Incorporates previously generated PR walkthrough steps
 
 ✅ **Intelligent Context Retrieval**
+
 - Uses QDrant vector search to find related code chunks
 - Filters results by repository ID
 - Returns function definitions, class declarations, and related code
 
 ✅ **AI-Powered Answers**
+
 - Generates comprehensive answers using Gemini AI
 - References related code context in explanations
 - Provides confidence scoring (high/medium/low)
 - Lists source files for transparency
 
 ✅ **Production Ready**
+
 - Full TypeScript implementation
 - Comprehensive error handling
 - Request validation
@@ -31,6 +35,7 @@ A complete `/tools/review` endpoint that enables AI-powered question answering a
 ## Files Created/Modified
 
 ### New Files
+
 1. **`src/server/routes/toolsReview.ts`** - Route handler for /tools/review endpoint
 2. **`src/services/ai/contextualReview.ts`** - Core service for question answering
 3. **`src/server/routes/README.md`** - Routes directory documentation
@@ -39,6 +44,7 @@ A complete `/tools/review` endpoint that enables AI-powered question answering a
 6. **`test-tools-review.sh`** - Test script for the endpoint
 
 ### Modified Files
+
 1. **`src/server/app.ts`** - Integrated new route
 2. **`src/server/types.ts`** - Added new TypeScript types
 
@@ -85,6 +91,7 @@ A complete `/tools/review` endpoint that enables AI-powered question answering a
 ## How It Works
 
 ### 1. Request Flow
+
 ```typescript
 // User asks: "What does toggleLike do?"
 POST /tools/review
@@ -98,13 +105,16 @@ POST /tools/review
 ```
 
 ### 2. Context Building
+
 The service combines multiple context sources:
+
 - **User's question**: "What does toggleLike do?"
 - **Code snippet**: The actual code being asked about
 - **QDrant search**: Finds related code (function definitions, etc.)
 - **Walkthrough steps**: Previously generated PR context (if available)
 
 ### 3. QDrant Search
+
 ```typescript
 // Searches for semantically similar code chunks
 const searchQuery = buildSearchQuery(input);
@@ -113,13 +123,14 @@ const embedding = await getEmbedding(searchQuery);
 const results = await qdrant.search({
   vector: embedding,
   filter: { repoId: "owner_repo" },
-  limit: 5
+  limit: 5,
 });
 
 // Returns: toggleLike function definition from LikedArticlesContext
 ```
 
 ### 4. AI Prompt Generation
+
 ```
 You are an expert code reviewer...
 
@@ -132,8 +143,8 @@ const handleLike = () => { toggleLike(article.pageid); };
 ### Related Code Context:
 1. LikedArticlesContext.tsx - toggleLike (function)
    const toggleLike = (pageid: number) => {
-     setLikedArticles(prev => 
-       prev.includes(pageid) 
+     setLikedArticles(prev =>
+       prev.includes(pageid)
          ? prev.filter(id => id !== pageid)
          : [...prev, pageid]
      );
@@ -143,6 +154,7 @@ Provide a clear, concise answer...
 ```
 
 ### 5. Response
+
 ```json
 {
   "status": "success",
@@ -166,6 +178,7 @@ The implementation leverages existing infrastructure:
 ## Usage Examples
 
 ### Basic Question
+
 ```bash
 curl -X POST http://localhost:3000/tools/review \
   -H "Content-Type: application/json" \
@@ -176,6 +189,7 @@ curl -X POST http://localhost:3000/tools/review \
 ```
 
 ### Question About Specific Code
+
 ```bash
 curl -X POST http://localhost:3000/tools/review \
   -H "Content-Type: application/json" \
@@ -189,6 +203,7 @@ curl -X POST http://localhost:3000/tools/review \
 ```
 
 ### With PR Walkthrough Context
+
 ```bash
 curl -X POST http://localhost:3000/tools/review \
   -H "Content-Type: application/json" \
@@ -209,11 +224,13 @@ curl -X POST http://localhost:3000/tools/review \
 ## Testing
 
 Run the test script:
+
 ```bash
 ./test-tools-review.sh
 ```
 
 Or test manually:
+
 ```bash
 # Start the server
 npm run server:dev
@@ -227,6 +244,7 @@ curl -X POST http://localhost:3000/tools/review \
 ## Browser Extension Integration
 
 See `examples/browser-extension-integration.js` for a complete example of:
+
 - Capturing code selection in GitHub PR UI
 - Extracting file and line number context
 - Making API calls
@@ -238,6 +256,7 @@ See `examples/browser-extension-integration.js` for a complete example of:
 To use this in production:
 
 1. **Index Your Repository**
+
    ```bash
    curl -X POST http://localhost:3000/init-repository \
      -H "Content-Type: application/json" \
@@ -245,6 +264,7 @@ To use this in production:
    ```
 
 2. **Build UI Integration**
+
    - Use the browser extension example as a template
    - Or build a standalone web app
    - Or integrate with existing review tools
@@ -263,6 +283,7 @@ To use this in production:
 ## Error Handling
 
 The endpoint handles:
+
 - Missing required fields (400 Bad Request)
 - Repository not indexed (500 Internal Server Error)
 - QDrant connection failures (500 Internal Server Error)
@@ -280,6 +301,7 @@ All errors return structured JSON responses with details.
 ## Summary
 
 You now have a fully functional AI-powered code Q&A system that:
+
 - ✅ Understands context from GitHub PR reviews
 - ✅ Uses vector search to find related code
 - ✅ Generates intelligent, context-aware answers
